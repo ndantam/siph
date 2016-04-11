@@ -20,10 +20,28 @@ siph_dist_root() {
     SIPH_TMP_ROOT="$SIPH_ROOT/tmp/${SIPH_TYPE}_${SIPH_RELEASE}"
 }
 
-## COMMANDS ##
 
 siph_distcommand() {
     chroot "$SIPH_DIST_ROOT" /bin/sh -c "$1"
+}
+
+## COMMANDS ##
+
+
+siph_tmpclone()
+{
+    siph_dist_root $@
+    mkdir -p "$SIPH_ROOT/tmp"
+    btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT"
+}
+
+siph_tmpclean()
+{
+    for SIPH_TMP_ROOT in $SIPH_ROOT/tmp/*; do
+        if [ -d "$SIPH_TMP_ROOT" ] ; then
+            btrfs subvolume delete "$SIPH_TMP_ROOT"
+        fi
+    done
 }
 
 siph_rmdist()
@@ -70,6 +88,7 @@ siph_mkdist()
 }
 
 
+
 ## DISPATCH ##
 
 
@@ -94,6 +113,12 @@ case "$SIPH_CMD" in
         ;;
     distinstall)
         siph_distinstall $@
+        ;;
+    tmp)
+        siph_tmpclone $@
+        ;;
+    clean)
+        siph_tmpclean $@
         ;;
     *)
         siph_err "Invalid Command '$SIPH_CMD'"
