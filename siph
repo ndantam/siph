@@ -1,0 +1,101 @@
+#!/bin/sh
+
+## VARS ##
+
+SIPH_ROOT=/var/cache/siph
+SIPH_MIRROR_DEBIAN=https://mirrors.kernel.org/debian
+SIPH_MIRROR_UBUNTU=http://archive.ubuntu.com/ubuntu/
+
+## HELPERS ##
+
+siph_err()  {
+    echo "SIPH ERROR: $1"
+    exit 1
+}
+
+siph_dist_root() {
+    SIPH_TYPE="$1"
+    SIPH_RELEASE="$2"
+    SIPH_DIST_ROOT="$SIPH_ROOT/dists/${SIPH_TYPE}_${SIPH_RELEASE}"
+    SIPH_TMP_ROOT="$SIPH_ROOT/tmp/${SIPH_TYPE}_${SIPH_RELEASE}"
+}
+
+## COMMANDS ##
+
+siph_distcommand() {
+    chroot "$SIPH_DIST_ROOT" /bin/sh -c "$1"
+}
+
+siph_rmdist()
+{
+    siph_dist_root $@
+    btrfs subvolume delete "$SIPH_DIST_ROOT"
+}
+
+
+siph_update()
+{
+    for SIPH_DIST_ROOT in $SIPH_ROOT/dists/*; do
+        siph_distcommand "apt-get update && apt-get dist-upgrade"
+    done
+}
+
+
+siph_distinstall()
+{
+    siph_dist_root $@
+    shift; shift
+    siph_distcommand "apt-get install $@"
+}
+
+
+siph_mkdist()
+{
+    siph_dist_root $@
+    shift; shift;
+    SIPH_MIRROR="$1"
+    mkdir -p "$SIPH_ROOT/dists"
+    btrfs subvolume create "$SIPH_DIST_ROOT"
+    case $SIPH_TYPE in
+        debian)
+            debootstrap "$SIPH_RELEASE" "$SIPH_DIST_ROOT" "$SIPH_MIRROR_DEBIAN"
+            ;;
+        ubuntu)
+            debootstrap "$SIPH_RELEASE" "$SIPH_DIST_ROOT" "$SIPH_MIRROR_UBUNTU"
+            ;;
+        *)
+            siph_error "Unknown distribution type: $SIPH_TYPE"
+            ;;
+    esac
+}
+
+
+## DISPATCH ##
+
+
+SIPH_CMD="$1"
+
+if [ -z "$SIPH_CMD" ] ; then
+    siph_err "No command given"
+fi
+
+
+shift
+
+case "$SIPH_CMD" in
+    mkdist)
+        siph_mkdist $@
+        ;;
+    rmdist)
+        siph_rmdist $@
+        ;;
+    update)
+        siph_update $@
+        ;;
+    distinstall)
+        siph_distinstall $@
+        ;;
+    *)
+        siph_err "Invalid Command '$SIPH_CMD'"
+        ;;
+esac
