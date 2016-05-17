@@ -23,6 +23,23 @@ SETUP
 
     `siph mkdist debian jessie`
 
+.SIPH Files
+===========
+
+Variables
+---------
+
+* `SIPH_SRCDIR`: top-level source directory
+* `SIPH_BUILDDIR`: top-level build directory
+
+Functions
+---------
+
+* `siph_pkg_deps()`: install any dependencies
+* `siph_pkg_configure()`: configures the package
+* `siph_pkg_compile()`: compiles the package
+* `siph_pkg_test()`: test the package
+
 
 
 ETYMOLOGY

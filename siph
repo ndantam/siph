@@ -5,6 +5,7 @@
 SIPH_ROOT=/var/cache/siph
 SIPH_MIRROR_DEBIAN=https://mirrors.kernel.org/debian
 SIPH_MIRROR_UBUNTU=http://archive.ubuntu.com/ubuntu/
+SIPH_SCRIPT="$0"
 
 ## HELPERS ##
 
@@ -14,8 +15,8 @@ siph_err()  {
 }
 
 siph_dist_root() {
-    SIPH_TYPE="$1"
-    SIPH_RELEASE="$2"
+    SIPH_TYPE="$1"; shift
+    SIPH_RELEASE="$1"; shift
     SIPH_DIST_ROOT="$SIPH_ROOT/dists/${SIPH_TYPE}_${SIPH_RELEASE}"
     SIPH_TMP_ROOT="$SIPH_ROOT/tmp/${SIPH_TYPE}_${SIPH_RELEASE}"
 }
@@ -31,14 +32,22 @@ siph_distcommand() {
 siph_tmpclone()
 {
     siph_dist_root $@
+    if [ -d "$SIPH_TMP_ROOT" ] ; then
+        echo "ERROR: tmp directory '$SIPH_TMP_ROOT' already exists"
+        exit 1
+    fi
     mkdir -p "$SIPH_ROOT/tmp"
     btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT"
+    mount -o bind /proc "$SIPH_TMP_ROOT/proc"
+    cp "$SIPH_SCRIPT" "$SIPH_TMP_ROOT"
+    echo "$SIPH_TMP_ROOT"
 }
 
 siph_tmpclean()
 {
     for SIPH_TMP_ROOT in $SIPH_ROOT/tmp/*; do
         if [ -d "$SIPH_TMP_ROOT" ] ; then
+            umount "$SIPH_TMP_ROOT/proc"
             btrfs subvolume delete "$SIPH_TMP_ROOT"
         fi
     done
@@ -54,23 +63,21 @@ siph_rmdist()
 siph_update()
 {
     for SIPH_DIST_ROOT in $SIPH_ROOT/dists/*; do
-        siph_distcommand "apt-get update && apt-get dist-upgrade"
+        siph_distcommand "apt-get update && apt-get -yudist-upgrade"
     done
 }
 
 
 siph_distinstall()
 {
-    siph_dist_root $@
-    shift; shift
+    siph_dist_root $@; shift; shift;
     siph_distcommand "apt-get install $@"
 }
 
 
 siph_mkdist()
 {
-    siph_dist_root $@
-    shift; shift;
+    siph_dist_root $@; shift; shift;
     SIPH_MIRROR="$1"
     mkdir -p "$SIPH_ROOT/dists"
     btrfs subvolume create "$SIPH_DIST_ROOT"
@@ -88,18 +95,60 @@ siph_mkdist()
 }
 
 
+siph_pkg() {
+    SIPH_FILE="$1"; shift
+    . "$SIPH_FILE" && \
+        echo "> SIPH DEPS" && \
+        siph_pkg_deps && \
+        echo "> SIPH CONFIGURE" && \
+        siph_pkg_configure && \
+        echo "> SIPH COMPILE" && \
+        siph_pkg_compile && \
+        echo "> SIPH TEST" && \
+        siph_pkg_test
+}
+
+siph_build() {
+    siph_tmpclone $@; shift; shift;
+    SIPH_REPO="$1"; shift
+    WORK_SUBDIR="/tmp/siph-repo"
+    WORKDIR="$SIPH_TMP_ROOT/$WORK_SUBDIR"
+
+    git clone $SIPH_REPO "$WORKDIR"
+    chroot "$SIPH_TMP_ROOT" /bin/sh -c "cd $WORK_SUBDIR && /siph pkg ./.siph"
+
+    siph_tmpclean
+}
+
+
+## Portability Functions
+
+siph_apt_get () {
+    if test -n `which apt-get`; then
+        apt-get $@
+    fi
+}
+
+## Build Stubs
+
+siph_pkg_deps() { true; }
+
+siph_pkg_configure() { true; }
+
+siph_pkg_compile() { true; }
+
+siph_pkg_test() { true; }
+
+
 
 ## DISPATCH ##
-
-
-SIPH_CMD="$1"
+SIPH_CMD="$1"; shift
 
 if [ -z "$SIPH_CMD" ] ; then
     siph_err "No command given"
 fi
 
 
-shift
 
 case "$SIPH_CMD" in
     mkdist)
@@ -119,6 +168,30 @@ case "$SIPH_CMD" in
         ;;
     clean)
         siph_tmpclean $@
+        ;;
+    pkg)
+        siph_pkg $@
+        ;;
+    build)
+        siph_build $@
+        ;;
+    help)
+        echo "Usage: siph COMMAND"
+        echo ""
+        echo "    siph mkdist OS DISTRIBUTION"
+        echo "        Create a root directory tree"
+        echo "    siph rmdist OS DISTRIBUTION"
+        echo "        Delete a root directory tree"
+        echo "    siph update OS DISTRIBUTION"
+        echo "        Update a root directory tree"
+        echo "    siph distinstall OS DISTRIBUTION packages..."
+        echo "        Install packages in a root directory tree"
+        echo "    siph tmp OS DISTRIBUTION"
+        echo "        Create a temporary clone of a root tree"
+        echo "    siph clean"
+        echo "        Remove all temporary root clones"
+        echo "    siph build OS DISTRIBUTION REPO"
+        echo "        Build repo in root"
         ;;
     *)
         siph_err "Invalid Command '$SIPH_CMD'"
