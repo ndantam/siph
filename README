@@ -29,6 +29,7 @@ SETUP
 Variables
 ---------
 
+* `SIPH_PKG_NAME`: Name of the package
 * `SIPH_SRCDIR`: top-level source directory
 * `SIPH_BUILDDIR`: top-level build directory
 

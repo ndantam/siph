@@ -6,12 +6,24 @@ SIPH_ROOT=/var/cache/siph
 SIPH_MIRROR_DEBIAN=https://mirrors.kernel.org/debian
 SIPH_MIRROR_UBUNTU=http://archive.ubuntu.com/ubuntu/
 SIPH_SCRIPT="$0"
+SIPH_REPODIR=~/.siph/repo
+SIPH_WORKDIR=~/.siph/work
+
+SIPH_MAKE_J=2
 
 ## HELPERS ##
 
 siph_err()  {
     echo "SIPH ERROR: $1"
     exit 1
+}
+
+siph_msg() {
+    echo "SIPH: $1"
+}
+
+siph_debug() {
+    echo "SIPH DEBUG: $1"
 }
 
 siph_dist_root() {
@@ -33,8 +45,7 @@ siph_tmpclone()
 {
     siph_dist_root $@
     if [ -d "$SIPH_TMP_ROOT" ] ; then
-        echo "ERROR: tmp directory '$SIPH_TMP_ROOT' already exists"
-        exit 1
+        siph_err "ERROR: tmp directory '$SIPH_TMP_ROOT' already exists"
     fi
     mkdir -p "$SIPH_ROOT/tmp"
     btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT"
@@ -95,25 +106,65 @@ siph_mkdist()
 }
 
 
-siph_pkg() {
-    SIPH_FILE="$1"; shift
-    . "$SIPH_FILE" && \
-        echo "> SIPH DEPS" && \
-        siph_pkg_deps && \
-        echo "> SIPH CONFIGURE" && \
-        siph_pkg_configure && \
-        echo "> SIPH COMPILE" && \
-        siph_pkg_compile && \
-        echo "> SIPH TEST" && \
-        siph_pkg_test
+siph_do_pkg_deps() {
+    siph_msg "DEPS"
+    siph_pkg_deps || siph_err "Package dependencies failed"
 }
 
-siph_build() {
+siph_do_pkg_fetch() {
+    siph_msg "FETCH"
+    siph_pkg_fetch || siph_err "Package fetch failed"
+}
+
+siph_do_pkg_configure() {
+    siph_msg "CONFIGURE"
+    siph_pkg_configure || siph_err "Package configure failed"
+}
+
+siph_do_pkg_compile() {
+    siph_msg "COMPILE"
+    siph_pkg_compile || siph_err "Package compile failed"
+}
+
+siph_do_pkg_test() {
+    siph_msg "TEST"
+    siph_pkg_test || siph_err "Package compile failed"
+}
+
+siph_do_pkg_install() {
+    siph_msg "INSTALL"
+    siph_pkg_install || siph_err "Package install failed"
+}
+
+siph_do_source() {
+    SIPH_FILE="$1"; shift
+    . "$SIPH_FILE" || siph_err "Could not source '$SIPH_FILE'"
+    siph_check_pkg
+}
+
+siph_testpkg() {
+    SIPH_FILE="$1"; shift
+    siph_do_source "$SIPH_FILE"
+    siph_do_pkg_deps
+    siph_do_pkg_fetch
+    siph_do_pkg_configure
+    siph_do_pkg_compile
+    siph_do_pkg_test
+}
+
+siph_testrepo() {
     siph_tmpclone $@; shift; shift;
     SIPH_REPO="$1"; shift
-    WORK_SUBDIR="/tmp/siph-repo"
+
+    if test -z "$1"; then
+        WORK_SUBDIR="/tmp/siph-repo"
+    else
+        true
+    fi
+
     WORKDIR="$SIPH_TMP_ROOT/$WORK_SUBDIR"
 
+    siph_msg "Cloning rep '$SIPH_REPO' to '$WORKDIR'"
     git clone $SIPH_REPO "$WORKDIR"
     chroot "$SIPH_TMP_ROOT" /bin/sh -c "cd $WORK_SUBDIR && /siph pkg ./.siph"
 
@@ -121,15 +172,62 @@ siph_build() {
 }
 
 
+siph_install()
+{
+    # Locate file
+    SPEC="$1"
+    if test -f "$SPEC"; then
+        SIPH_FILE="$SPEC"
+    else
+        rest="$SIPH_PKG_ROOT"
+        while test "x" != "x$rest" -a '!' -f "$SIPH_FILE"; do
+            first=`echo $rest | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\1/'`
+            rest=`echo $rest  | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\2/'`
+            SIPH_FILE="$first"/"$SPEC".siph
+        done
+    fi
+    #siph_msg "$SIPH_FILE"
+    if test '!' -f "$SIPH_FILE"; then
+       siph_err "Could not find package $SPEC"
+    fi
+
+    # build and install
+    siph_testpkg "$SIPH_FILE"
+    siph_do_pkg_install
+
+    # (echo "> SIPH DEPS" && siph_pkg_deps) &&
+    #     echo "> SIPH FETCH" && \
+    #     siph_pkg_fetch && \
+    #     echo "> SIPH CONFIGURE" && \
+    #     siph_pkg_configure && \
+    #     echo "> SIPH COMPILE" && \
+    #     siph_pkg_compile && \
+    #     echo "> SIPH TEST" && \
+
+
+}
+
+
 ## Portability Functions
 
 siph_apt_get () {
-    if test -n `which apt-get`; then
-        apt-get $@
+    if test -n `which apt-get` ; then
+        if test 0 = `id -u`; then
+            apt-get $@
+        else
+            echo "Not root, skipping apt-get install"
+        fi
     fi
 }
 
 ## Build Stubs
+
+SIPH_PKG_BRANCH="master"
+
+siph_pkg_fetch() {
+    SIPH_SRCDIR='.'
+    SIPH_BUILDDIR='.'
+}
 
 siph_pkg_deps() { true; }
 
@@ -139,6 +237,54 @@ siph_pkg_compile() { true; }
 
 siph_pkg_test() { true; }
 
+siph_pkg_install() { true; }
+
+
+## Build Helpers
+
+siph_check_pkg() {
+    test -n "$SIPH_PKG_NAME" || siph_err "No package name"
+    test -n "$SIPH_PKG_REPO" || siph_err "No package repo"
+    test -n "$SIPH_PKG_BRANCH" || siph_err "No package branch"
+}
+
+siph_workdir () {
+    mkdir -p
+}
+
+siph_fetch_git () {
+    mkdir -p "$SIPH_REPODIR"
+    repo="$SIPH_REPODIR/$SIPH_PKG_NAME"
+    if [ -d "$repo" ]; then
+        # TODO: check if repo URL has changed
+        siph_msg "Updating '$repo'"
+        cd "$repo"
+        git fetch && git checkout "$SIPH_PKG_BRANCH"
+    else
+        siph_msg "Cloning '$SIPH_PKG_REPO'"
+        git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
+        cd "$repo" && git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
+        SIPH_SRCDIR='.'
+        SIPH_BUILDDIR='.'
+    fi
+}
+
+
+
+## Config files ##
+
+siph_load_conf()
+{
+    if test -f "$1"; then
+        . "$1"
+    fi
+}
+
+
+siph_load_conf /etc/siph
+siph_load_conf /etc/siph/config
+siph_load_conf ~/.config/siph
+siph_load_conf ~/.siph/config
 
 
 ## DISPATCH ##
@@ -169,11 +315,14 @@ case "$SIPH_CMD" in
     clean)
         siph_tmpclean $@
         ;;
-    pkg)
-        siph_pkg $@
+    testpkg)
+        siph_testpkg $@
         ;;
-    build)
-        siph_build $@
+    testrepo)
+        siph_testrepo $@
+        ;;
+    install)
+        siph_install $@
         ;;
     help)
         echo "Usage: siph COMMAND"
@@ -190,8 +339,10 @@ case "$SIPH_CMD" in
         echo "        Create a temporary clone of a root tree"
         echo "    siph clean"
         echo "        Remove all temporary root clones"
-        echo "    siph build OS DISTRIBUTION REPO"
-        echo "        Build repo in root"
+        echo "    siph testrepo OS DISTRIBUTION REPO"
+        echo "        Build and test REPO in root"
+        echo "    siph install PACKAGE"
+        echo "        Install PACKAGE"
         ;;
     *)
         siph_err "Invalid Command '$SIPH_CMD'"
