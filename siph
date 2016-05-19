@@ -8,6 +8,9 @@ SIPH_MIRROR_UBUNTU=http://archive.ubuntu.com/ubuntu/
 SIPH_SCRIPT="$0"
 SIPH_REPODIR=~/.siph/repo
 SIPH_WORKDIR=~/.siph/work
+SIPH_DBDIR=~/.siph/db
+
+SIPH_PREFIX=/usr/local
 
 SIPH_MAKE_J=2
 
@@ -106,50 +109,96 @@ siph_mkdist()
 }
 
 
-siph_do_pkg_deps() {
+siph_bld_deps() {
     siph_msg "DEPS"
     siph_pkg_deps || siph_err "Package dependencies failed"
 }
 
-siph_do_pkg_fetch() {
+siph_bld_fetch() {
     siph_msg "FETCH"
     siph_pkg_fetch || siph_err "Package fetch failed"
 }
 
-siph_do_pkg_configure() {
+siph_bld_configure() {
     siph_msg "CONFIGURE"
     siph_pkg_configure || siph_err "Package configure failed"
 }
 
-siph_do_pkg_compile() {
+siph_bld_compile() {
     siph_msg "COMPILE"
     siph_pkg_compile || siph_err "Package compile failed"
 }
 
-siph_do_pkg_test() {
+siph_bld_test() {
     siph_msg "TEST"
     siph_pkg_test || siph_err "Package compile failed"
 }
 
-siph_do_pkg_install() {
-    siph_msg "INSTALL"
-    siph_pkg_install || siph_err "Package install failed"
+
+siph_install_dir() {
+    if test '!' -d "/$1"; then
+        mkdir -v "/$1"
+        echo "$1" >> "$SIPH_BLD_DBDIR/dirs"
+    fi
 }
 
-siph_do_source() {
+siph_install_file() {
+    dir=`dirname "$1"`
+    siph_install_dir "$dir"
+    install -v "$1" "/$1"
+}
+
+siph_bld_install() {
+    siph_msg "INSTALL"
+    if test -e "$SIPH_BLD_DESTDIR"; then
+        siph_err "Destination directory '$SIPH_BLD_DESTDIR' already exists"
+    fi
+    mkdir -p "$SIPH_BLD_DESTDIR"
+    siph_pkg_install || siph_err "Package install failed"
+
+    # Record files
+    SIPH_BLD_DBDIR="$SIPH_DBDIR/$SIPH_PKG_NAME"
+    mkdir -p "$SIPH_BLD_DBDIR"
+
+    # TODO: handle merging over installed package
+    # TODO: track created directories
+
+    (cd "$SIPH_BLD_DESTDIR" && find) > "$SIPH_BLD_DBDIR/files"
+    ## install into filesystem
+    cat "$SIPH_BLD_DBDIR/files" | ( \
+        cd "$SIPH_BLD_DESTDIR"
+        while read -r file; do \
+            if test -d "$file"; then \
+                siph_install_dir "$file"; \
+            else  \
+                siph_install_file "$file"; \
+            fi ; \
+        done \
+    )
+}
+
+siph_bld_source() {
     SIPH_FILE="$1"; shift
     . "$SIPH_FILE" || siph_err "Could not source '$SIPH_FILE'"
     siph_check_pkg
+
+    test -n "$SIPH_PKG_NAME" || siph_err "No package name"
+    test -n "$SIPH_PKG_REPO" || siph_err "No package repo"
+    test -n "$SIPH_PKG_BRANCH" || siph_err "No package branch"
+
+    SIPH_BLD_PREFIX="$SIPH_PREFIX"
+    SIPH_BLD_WORKDIR="$SIPH_WORKDIR/$SIPH_PKG_NAME"
+    SIPH_BLD_DESTDIR="$SIPH_BLD_WORKDIR/dest"
 }
 
 siph_testpkg() {
     SIPH_FILE="$1"; shift
-    siph_do_source "$SIPH_FILE"
-    siph_do_pkg_deps
-    siph_do_pkg_fetch
-    siph_do_pkg_configure
-    siph_do_pkg_compile
-    siph_do_pkg_test
+    siph_bld_source "$SIPH_FILE"
+    siph_bld_deps
+    siph_bld_fetch
+    siph_bld_configure
+    siph_bld_compile
+    siph_bld_test
 }
 
 siph_testrepo() {
@@ -193,7 +242,7 @@ siph_install()
 
     # build and install
     siph_testpkg "$SIPH_FILE"
-    siph_do_pkg_install
+    siph_bld_install
 
     # (echo "> SIPH DEPS" && siph_pkg_deps) &&
     #     echo "> SIPH FETCH" && \
@@ -204,7 +253,7 @@ siph_install()
     #     siph_pkg_compile && \
     #     echo "> SIPH TEST" && \
 
-
+    rm -r "$SIPH_BLD_WORKDIR"
 }
 
 
@@ -225,8 +274,8 @@ siph_apt_get () {
 SIPH_PKG_BRANCH="master"
 
 siph_pkg_fetch() {
-    SIPH_SRCDIR='.'
-    SIPH_BUILDDIR='.'
+    SIPH_BLD_SRCDIR='.'
+    SIPH_BLD_BUILDDIR='.'
 }
 
 siph_pkg_deps() { true; }
@@ -241,13 +290,6 @@ siph_pkg_install() { true; }
 
 
 ## Build Helpers
-
-siph_check_pkg() {
-    test -n "$SIPH_PKG_NAME" || siph_err "No package name"
-    test -n "$SIPH_PKG_REPO" || siph_err "No package repo"
-    test -n "$SIPH_PKG_BRANCH" || siph_err "No package branch"
-}
-
 siph_workdir () {
     mkdir -p
 }
@@ -264,8 +306,8 @@ siph_fetch_git () {
         siph_msg "Cloning '$SIPH_PKG_REPO'"
         git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
         cd "$repo" && git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
-        SIPH_SRCDIR='.'
-        SIPH_BUILDDIR='.'
+        SIPH_BLD_SRCDIR='.'
+        SIPH_BLD_BUILDDIR='.'
     fi
 }
 
