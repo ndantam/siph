@@ -502,7 +502,13 @@ siph_pkg_compile()
     fi
 }
 
-siph_pkg_test() { true; }
+siph_pkg_test() {
+    if test -f "$SIPH_BLD_SRCDIR/configure.ac" -a -f "Makefile"; then
+        make check
+    elif test -f "$SIPH_BLD_SRCDIR/CMakeLists.txt" -a -f "Makefile"; then
+        make test
+    fi
+}
 
 siph_pkg_install()
 {
