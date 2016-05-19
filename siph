@@ -276,15 +276,6 @@ siph_install()
     siph_testpkg
     siph_bld_install
 
-    # (echo "> SIPH DEPS" && siph_pkg_deps) &&
-    #     echo "> SIPH FETCH" && \
-    #     siph_pkg_fetch && \
-    #     echo "> SIPH CONFIGURE" && \
-    #     siph_pkg_configure && \
-    #     echo "> SIPH COMPILE" && \
-    #     siph_pkg_compile && \
-    #     echo "> SIPH TEST" && \
-
     rm -r "$SIPH_BLD_WORKDIR"
 }
 
@@ -312,13 +303,28 @@ siph_pkg_fetch() {
 
 siph_pkg_deps() { true; }
 
-siph_pkg_configure() { true; }
+siph_pkg_configure()
+{
+    if test -f "$SIPH_BLD_SRCDIR/configure.ac"; then
+        autoreconf -i && "$SIPH_BLD_SRCDIR/configure" --prefix="$SIPH_BLD_PREFIX"
+    elif test -f "$SIPH_BLD_SRCDIR/CMakeLists.txt"; then
+        cmake "$SIPH_BLD_SRCDIR" -DCMAKE_INSTALL_PREFIX="$SIPH_BLD_PREFIX"
+    fi
+}
 
-siph_pkg_compile() { true; }
+siph_pkg_compile()
+{
+    if test -f Makefile; then
+        make -j "$SIPH_MAKE_J"
+    fi
+}
 
 siph_pkg_test() { true; }
 
-siph_pkg_install() { true; }
+siph_pkg_install()
+{
+    make install DESTDIR="$SIPH_BLD_DESTDIR"
+}
 
 
 ## Build Helpers
