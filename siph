@@ -320,7 +320,7 @@ siph_testpkg() {
     siph_bld_test
 }
 
-siph_test() {
+siph_testroot() {
     # clone the distro
     siph_tmpclone $@ || siph_err "Could not clone distro"
     shift
@@ -348,6 +348,17 @@ siph_test() {
     fi
 
     siph_tmpclean
+}
+
+siph_test() {
+    if [ "$#" = 1 ]; then
+        # test in current root
+        siph_testpkg "$1"
+    else
+        # test in chroot
+        siph_testroot $@
+    fi
+
 }
 
 
@@ -613,8 +624,8 @@ case "$SIPH_CMD" in
         echo ""
         echo "  PACKAGE TESTING:"
         echo "  ================"
-        echo "    siph test DISTRIBUTION PACKAGE"
-        echo "        Build and test REPO in root"
+        echo "    siph test [DISTRIBUTION] PACKAGE"
+        echo "        Build and test PACKAGE, optionally in DISTRIBUTION"
         echo ""
         echo "  PACKAGE MANAGEMENT:"
         echo "  ==================="
