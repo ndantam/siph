@@ -166,6 +166,8 @@ siph_lsdist() {
     ls $@ "$SIPH_ROOT/dists"
 }
 
+## Build Wrapers
+
 siph_bld_deps() {
     siph_msg "DEPS"
     cd "$SIPH_BLD_BUILDDIR"
@@ -433,6 +435,16 @@ EOF
     siph_find_quicklisp
 }
 
+## Package Helpers
+
+siph_deps_deb()
+{
+    if [ -n "$SIPH_PKG_DEPS_DEB" ]; then
+        siph_apt_install $SIPH_PKG_DEPS_DEB
+    fi
+}
+
+
 ## Build Stubs
 
 SIPH_PKG_BRANCH="master"
@@ -443,7 +455,10 @@ siph_pkg_fetch() {
     true
 }
 
-siph_pkg_deps() { true; }
+siph_pkg_deps()
+{
+    siph_deps_deb
+}
 
 siph_pkg_configure()
 {
