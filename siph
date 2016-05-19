@@ -111,26 +111,31 @@ siph_mkdist()
 
 siph_bld_deps() {
     siph_msg "DEPS"
+    cd "$SIPH_BLD_BUILDDIR"
     siph_pkg_deps || siph_err "Package dependencies failed"
 }
 
 siph_bld_fetch() {
     siph_msg "FETCH"
+    cd "$SIPH_BLD_BUILDDIR"
     siph_pkg_fetch || siph_err "Package fetch failed"
 }
 
 siph_bld_configure() {
     siph_msg "CONFIGURE"
+    cd "$SIPH_BLD_BUILDDIR"
     siph_pkg_configure || siph_err "Package configure failed"
 }
 
 siph_bld_compile() {
     siph_msg "COMPILE"
+    cd "$SIPH_BLD_BUILDDIR"
     siph_pkg_compile || siph_err "Package compile failed"
 }
 
 siph_bld_test() {
     siph_msg "TEST"
+    cd "$SIPH_BLD_BUILDDIR"
     siph_pkg_test || siph_err "Package compile failed"
 }
 
@@ -191,6 +196,11 @@ siph_bld_source() {
     if test -f "$SPEC"; then
         # Explicit file
         SIPH_FILE="$SPEC"
+    elif test -f "$SPEC/.siph"; then
+        # Explicit repo
+        SIPH_FILE="$SPEC/.siph"
+        SIPH_BLD_SRCDIR="$SPEC"
+        SIPH_BLD_BUILDDIR="$SPEC"
     elif (echo "$SPEC" |  grep 'https\?:\/\/.*' > /dev/null); then
         # Repo
         siph_msg "Syncing repo '$SPEC'"
@@ -321,8 +331,24 @@ siph_install_base () {
                  sbcl curl
 }
 
+
+siph_find_quicklisp ()
+{
+    if test -d "$HOME/quicklisp"; then
+        SIPH_QUICKLISP="$HOME/quicklisp"
+    elif test -d "$HOME/.quicklisp"; then
+        SIPH_QUICKLISP="$HOME/.quicklisp"
+    elif test -d "$HOME/Quicklisp"; then
+        SIPH_QUICKLISP="$HOME/Quicklisp"
+    elif test -d "$SIPH_PREFIX/quicklisp"; then
+        SIPH_QUICKLISP="$SIPH_PREFIX/quicklisp"
+    fi
+
+}
+
 siph_install_quicklisp () {
-    if test '!' -e "$SIPH_PREFIX/quicklisp"; then
+    siph_find_quicklisp
+    if test '!' -e "$SIPH_QUICKLISP"; then
         file=`tempfile`
         curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp"
         sbcl --script <<EOF
@@ -331,6 +357,7 @@ siph_install_quicklisp () {
 EOF
         rm "$file"
     fi
+    siph_find_quicklisp
 }
 
 ## Build Stubs
@@ -338,8 +365,9 @@ EOF
 SIPH_PKG_BRANCH="master"
 
 siph_pkg_fetch() {
-    SIPH_BLD_SRCDIR='.'
-    SIPH_BLD_BUILDDIR='.'
+    # SIPH_BLD_SRCDIR=`pwd`
+    # SIPH_BLD_BUILDDIR=`pwd`
+    true
 }
 
 siph_pkg_deps() { true; }
@@ -385,9 +413,10 @@ siph_fetch_git () {
         siph_msg "Cloning '$SIPH_PKG_REPO'"
         git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
         cd "$repo" && git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
-        SIPH_BLD_SRCDIR='.'
-        SIPH_BLD_BUILDDIR='.'
     fi
+
+    SIPH_BLD_SRCDIR="$repo"
+    SIPH_BLD_BUILDDIR="$repo"
 }
 
 
