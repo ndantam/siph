@@ -273,7 +273,7 @@ siph_testpkg() {
 }
 
 siph_testrepo() {
-    siph_tmpclone $@; shift; shift;
+    siph_tmpclone $@; shift;
     SIPH_REPO="$1"; shift
 
     if test -z "$1"; then
@@ -286,7 +286,7 @@ siph_testrepo() {
 
     siph_msg "Cloning rep '$SIPH_REPO' to '$WORKDIR'"
     git clone $SIPH_REPO "$WORKDIR"
-    chroot "$SIPH_TMP_ROOT" /bin/sh -c "cd $WORK_SUBDIR && /siph pkg ./.siph"
+    chroot "$SIPH_TMP_ROOT" /bin/sh -c "cd $WORK_SUBDIR && /siph testpkg ./.siph"
 
     siph_tmpclean
 }
@@ -367,7 +367,7 @@ siph_install_quicklisp () {
     siph_find_quicklisp
     if test '!' -e "$SIPH_QUICKLISP"; then
         file=`tempfile`
-        curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp"
+        curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp" || siph_err "Could not fetch quicklisp"
         sbcl --script <<EOF
 (load "$file")
 (quicklisp-quickstart:install :path "$SIPH_PREFIX/quicklisp")
@@ -527,7 +527,7 @@ case "$SIPH_CMD" in
         echo ""
         echo "  PACKAGE TESTING:"
         echo "  ================"
-        echo "    siph testrepo OS DISTRIBUTION REPO"
+        echo "    siph testrepo DISTRIBUTION REPO"
         echo "        Build and test REPO in root"
         echo ""
         echo "  PACKAGE MANAGEMENT:"
