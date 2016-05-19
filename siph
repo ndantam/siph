@@ -145,7 +145,7 @@ siph_install_dir() {
 siph_install_file() {
     dir=`dirname "$1"`
     siph_install_dir "$dir"
-    install -v "$1" "/$1"
+    cp -av "$1" "/$1"
     echo "$1" >> "$SIPH_BLD_DBDIR/newfiles"
 }
 
