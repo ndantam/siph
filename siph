@@ -187,9 +187,24 @@ siph_bld_source() {
 
     # Locate file
     SPEC="$1"; shift;
+    repo_base=""
     if test -f "$SPEC"; then
+        # Explicit file
         SIPH_FILE="$SPEC"
+    elif (echo "$SPEC" |  grep 'https\?:\/\/.*' > /dev/null); then
+        # Repo
+        siph_msg "Syncing repo '$SPEC'"
+        repo_base=`echo "$SPEC" | sed -e 's!.*/\([^/.]*\)\(.git\)\?!\1!'`
+        if test -e "$SIPH_REPODIR/$repo_base"; then
+            cd "$SIPH_REPODIR/$repo_base"
+            git pull || siph_err "Could not pull"
+        else
+            cd "$SIPH_REPODIR"
+            git clone "$SPEC" || siph_err "Could not clone repo"
+        fi
+        SIPH_FILE="$SIPH_REPODIR/$repo_base/.siph"
     else
+        # Search package path for file
         rest="$SIPH_PKG_ROOT"
         while test "x" != "x$rest" -a '!' -f "$SIPH_FILE"; do
             first=`echo $rest | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\1/'`
@@ -207,6 +222,13 @@ siph_bld_source() {
     test -n "$SIPH_PKG_NAME" || siph_err "No package name"
     test -n "$SIPH_PKG_REPO" || siph_err "No package repo"
     test -n "$SIPH_PKG_BRANCH" || siph_err "No package branch"
+
+    if test -n "$repo_base"; then
+        test "x$repo_base" = "x$SIPH_PKG_NAME" || \
+            siph_err "Mismatched repo basename ($repo_base) and package name ($SIPH_PKG_NAME)"
+    fi
+
+    # TODO: check that repo URL matches spec
 
     SIPH_BLD_PREFIX="$SIPH_PREFIX"
     SIPH_BLD_WORKDIR="$SIPH_WORKDIR/$SIPH_PKG_NAME"
