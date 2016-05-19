@@ -6,9 +6,18 @@ SIPH_ROOT=/var/cache/siph
 SIPH_MIRROR_DEBIAN=https://mirrors.kernel.org/debian
 SIPH_MIRROR_UBUNTU=http://archive.ubuntu.com/ubuntu/
 SIPH_SCRIPT="$0"
-SIPH_REPODIR=~/.siph/repo
-SIPH_WORKDIR=~/.siph/work
-SIPH_DBDIR=~/.siph/db
+
+
+
+SIPH_DEFAULT_REPODIR="$SIPH_ROOT/repo"
+SIPH_DEFAULT_WORKDIR="$SIPH_ROOT/work"
+SIPH_DEFAULT_DBDIR="$SIPH_ROOT/db"
+SIPH_DEFAULT_PKGDIR="/siph-pkg"
+
+SIPH_REPODIR="$SIPH_DEFAULT_REPODIR"
+SIPH_WORKDIR="$SIPH_DEFAULT_WORKDIR"
+SIPH_DBDIR="$SIPH_DEFAULT_DBDIR"
+SIPH_PKGDIR="$SIPH_DEFAULT_PKGDIR"
 
 SIPH_PREFIX=/usr/local
 
@@ -37,6 +46,7 @@ siph_dist_root() {
 
 
 siph_distcommand() {
+    siph_msg "Chrooting into $SIPH_DIST_NAME"
     chroot "$SIPH_DIST_ROOT" /bin/sh -c "$1"
 }
 
@@ -50,8 +60,12 @@ siph_tmpclone()
         siph_err "ERROR: tmp directory '$SIPH_TMP_ROOT' already exists"
     fi
     mkdir -p "$SIPH_ROOT/tmp"
-    btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT"
+    btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT" || siph_err "Could not clone '$SIPH_DIST_ROOT'"
     mount -o bind /proc "$SIPH_TMP_ROOT/proc"
+    if [ -d "$SIPH_PKGDIR" ]; then
+        mkdir "$SIPH_TMP_ROOT/siph-pkg"
+        mount -o bind,ro "$SIPH_PKGDIR" "$SIPH_TMP_ROOT/siph-pkg"
+    fi
     cp "$SIPH_SCRIPT" "$SIPH_TMP_ROOT"
     echo "$SIPH_TMP_ROOT"
 }
@@ -61,6 +75,9 @@ siph_tmpclean()
     for SIPH_TMP_ROOT in $SIPH_ROOT/tmp/*; do
         if [ -d "$SIPH_TMP_ROOT" ] ; then
             umount "$SIPH_TMP_ROOT/proc"
+            if [ -d "$SIPH_TMP_ROOT/siph-pkg" ]; then
+                umount "$SIPH_TMP_ROOT/siph-pkg"
+            fi
             btrfs subvolume delete "$SIPH_TMP_ROOT"
         fi
     done
@@ -84,7 +101,7 @@ siph_update()
 siph_distinstall()
 {
     siph_dist_root $@; shift;
-    siph_distcommand "apt-get install $@"
+    siph_distcommand "apt-get install $*"
 }
 
 
@@ -232,7 +249,7 @@ siph_bld_source() {
         SIPH_FILE="$SIPH_REPODIR/$repo_base/.siph"
     else
         # Search package path for file
-        rest="$SIPH_PKG_ROOT"
+        rest="$SIPH_PKGDIR"
         while test "x" != "x$rest" -a '!' -f "$SIPH_FILE"; do
             first=`echo $rest | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\1/'`
             rest=`echo $rest  | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\2/'`
@@ -272,23 +289,30 @@ siph_testpkg() {
     siph_bld_test
 }
 
-siph_testrepo() {
-    siph_tmpclone $@; shift;
-    SIPH_REPO="$1"; shift
+siph_test() {
+    # clone the distro
+    siph_tmpclone $@ || siph_err "Could not clone distro"
+    shift
 
-    if test -z "$1"; then
-        WORK_SUBDIR="/tmp/siph-repo"
-    else
-        true
-    fi
+    # get sources in original root
+    siph_bld_source $@
+    here=`pwd`
+    siph_bld_fetch
+    cd "$here"
 
-    WORKDIR="$SIPH_TMP_ROOT/$WORK_SUBDIR"
+    # clone sources to tmp
+    siph_msg "srcdir: $SIPH_BLD_SRCDIR"
+    mkdir -p "${SIPH_TMP_ROOT}/${SIPH_DEFAULT_REPODIR}"
+    git clone "$SIPH_BLD_SRCDIR" "${SIPH_TMP_ROOT}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
 
-    siph_msg "Cloning rep '$SIPH_REPO' to '$WORKDIR'"
-    git clone $SIPH_REPO "$WORKDIR"
-    chroot "$SIPH_TMP_ROOT" /bin/sh -c "cd $WORK_SUBDIR && /siph testpkg ./.siph"
+    # Chroot and test
+    siph_msg "Chrooting into temporary $SIPH_DIST_NAME"
+    # chroot "$SIPH_TMP_ROOT" \
+    #        /bin/sh -c "/siph testpkg ${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+    chroot "$SIPH_TMP_ROOT" \
+           /bin/sh -c "/siph testpkg $@"
 
-    siph_tmpclean
+    #siph_tmpclean
 }
 
 
@@ -339,6 +363,10 @@ siph_apt_get () {
             echo "Not root, skipping apt-get install"
         fi
     fi
+}
+
+siph_apt_install () {
+    siph_apt_get -y install $@
 }
 
 siph_install_base () {
@@ -491,8 +519,8 @@ case "$SIPH_CMD" in
     testpkg)
         siph_testpkg $@
         ;;
-    testrepo)
-        siph_testrepo $@
+    test)
+        siph_test $@
         ;;
     install)
         siph_install $@
@@ -527,7 +555,7 @@ case "$SIPH_CMD" in
         echo ""
         echo "  PACKAGE TESTING:"
         echo "  ================"
-        echo "    siph testrepo DISTRIBUTION REPO"
+        echo "    siph test DISTRIBUTION PACKAGE"
         echo "        Build and test REPO in root"
         echo ""
         echo "  PACKAGE MANAGEMENT:"
