@@ -138,7 +138,7 @@ siph_bld_test() {
 siph_install_dir() {
     if test '!' -d "/$1"; then
         mkdir -v "/$1"
-        echo "$1" >> "$SIPH_BLD_DBDIR/dirs"
+        echo "$1" >> "$SIPH_BLD_DBDIR/newdirs"
     fi
 }
 
@@ -146,6 +146,7 @@ siph_install_file() {
     dir=`dirname "$1"`
     siph_install_dir "$dir"
     install -v "$1" "/$1"
+    echo "$1" >> "$SIPH_BLD_DBDIR/newfiles"
 }
 
 siph_bld_install() {
@@ -157,15 +158,15 @@ siph_bld_install() {
     siph_pkg_install || siph_err "Package install failed"
 
     # Record files
-    SIPH_BLD_DBDIR="$SIPH_DBDIR/$SIPH_PKG_NAME"
     mkdir -p "$SIPH_BLD_DBDIR"
 
     # TODO: handle merging over installed package
     # TODO: track created directories
 
-    (cd "$SIPH_BLD_DESTDIR" && find) > "$SIPH_BLD_DBDIR/files"
     ## install into filesystem
-    cat "$SIPH_BLD_DBDIR/files" | ( \
+    touch "$SIPH_BLD_DBDIR/newfiles"
+    touch "$SIPH_BLD_DBDIR/newdirs"
+    (cd "$SIPH_BLD_DESTDIR" && find) | ( \
         cd "$SIPH_BLD_DESTDIR"
         while read -r file; do \
             if test -d "$file"; then \
@@ -175,12 +176,33 @@ siph_bld_install() {
             fi ; \
         done \
     )
+    mv "$SIPH_BLD_DBDIR/newfiles" "$SIPH_BLD_DBDIR/files"
+    mv "$SIPH_BLD_DBDIR/newdirs" "$SIPH_BLD_DBDIR/dirs"
 }
 
 siph_bld_source() {
-    SIPH_FILE="$1"; shift
+    if test -z "$1"; then
+        return;
+    fi
+
+    # Locate file
+    SPEC="$1"; shift;
+    if test -f "$SPEC"; then
+        SIPH_FILE="$SPEC"
+    else
+        rest="$SIPH_PKG_ROOT"
+        while test "x" != "x$rest" -a '!' -f "$SIPH_FILE"; do
+            first=`echo $rest | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\1/'`
+            rest=`echo $rest  | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\2/'`
+            SIPH_FILE="$first"/"$SPEC".siph
+        done
+    fi
+    #siph_msg "$SIPH_FILE"
+    if test '!' -f "$SIPH_FILE"; then
+       siph_err "Could not find package $SPEC"
+    fi
+
     . "$SIPH_FILE" || siph_err "Could not source '$SIPH_FILE'"
-    siph_check_pkg
 
     test -n "$SIPH_PKG_NAME" || siph_err "No package name"
     test -n "$SIPH_PKG_REPO" || siph_err "No package repo"
@@ -189,11 +211,11 @@ siph_bld_source() {
     SIPH_BLD_PREFIX="$SIPH_PREFIX"
     SIPH_BLD_WORKDIR="$SIPH_WORKDIR/$SIPH_PKG_NAME"
     SIPH_BLD_DESTDIR="$SIPH_BLD_WORKDIR/dest"
+    SIPH_BLD_DBDIR="$SIPH_DBDIR/$SIPH_PKG_NAME"
 }
 
 siph_testpkg() {
-    SIPH_FILE="$1"; shift
-    siph_bld_source "$SIPH_FILE"
+    siph_bld_source $@
     siph_bld_deps
     siph_bld_fetch
     siph_bld_configure
@@ -221,27 +243,37 @@ siph_testrepo() {
 }
 
 
+siph_uninstall() {
+    siph_msg "INSTALL"
+    siph_bld_source "$1"
+
+    test -d "$SIPH_BLD_DBDIR" || siph_err "package '$SIPH_PKG_NAME' not installed"
+
+    # Remove files
+    ( \
+        while read -r file; do \
+            rm -v "/$file"; \
+        done \
+    ) < "$SIPH_BLD_DBDIR/files"
+
+    # Remove directory
+    tac "$SIPH_BLD_DBDIR/dirs" | ( \
+        while read -r file; do \
+            rmdir -v "/$file"; \
+        done \
+    )
+
+    # Remove package entry
+    rm -r "$SIPH_BLD_DBDIR"
+}
+
+
 siph_install()
 {
-    # Locate file
-    SPEC="$1"
-    if test -f "$SPEC"; then
-        SIPH_FILE="$SPEC"
-    else
-        rest="$SIPH_PKG_ROOT"
-        while test "x" != "x$rest" -a '!' -f "$SIPH_FILE"; do
-            first=`echo $rest | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\1/'`
-            rest=`echo $rest  | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\2/'`
-            SIPH_FILE="$first"/"$SPEC".siph
-        done
-    fi
-    #siph_msg "$SIPH_FILE"
-    if test '!' -f "$SIPH_FILE"; then
-       siph_err "Could not find package $SPEC"
-    fi
+    siph_bld_source "$1"
 
     # build and install
-    siph_testpkg "$SIPH_FILE"
+    siph_testpkg
     siph_bld_install
 
     # (echo "> SIPH DEPS" && siph_pkg_deps) &&
@@ -365,6 +397,9 @@ case "$SIPH_CMD" in
         ;;
     install)
         siph_install $@
+        ;;
+    uninstall)
+        siph_uninstall $@
         ;;
     help)
         echo "Usage: siph COMMAND"
