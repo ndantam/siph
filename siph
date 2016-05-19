@@ -252,16 +252,13 @@ siph_bld_source() {
     # Locate file
     SIPH_SPEC="$1"; shift;
     repo_base=""
-    if test -f "$SIPH_SPEC"; then
-        # Explicit file
-        SIPH_FILE="$SIPH_SPEC"
-    elif test -f "$SIPH_SPEC/.siph"; then
+    if test -f "$SIPH_SPEC/.siph"; then
         # Explicit repo
         SIPH_FILE="$SIPH_SPEC/.siph"
         SIPH_BLD_SRCDIR="$SIPH_SPEC"
         SIPH_BLD_BUILDDIR="$SIPH_SPEC"
     elif (echo "$SIPH_SPEC" |  grep 'https\?:\/\/.*' > /dev/null); then
-        # Repo
+        # Remote Repo
         siph_msg "Syncing repo '$SIPH_SPEC'"
         repo_base=`echo "$SIPH_SPEC" | sed -e 's!.*/\([^/.]*\)\(.git\)\?!\1!'`
         if test -e "$SIPH_REPODIR/$repo_base"; then
@@ -271,8 +268,11 @@ siph_bld_source() {
             cd "$SIPH_REPODIR"
             git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
         fi
-        SIPH_FILE="$SIPH_REPODIR/$repo_base/.siph"
+        SIPH_BLD_SRCDIR="$SIPH_REPODIR/$repo_base"
+        SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$repo_base"
+        SIPH_FILE="$SIPH_BLD_SRCDIR/.siph"
     else
+        # Package name
         # Search package path for file
         rest="$SIPH_PKGDIR"
         while test "x" != "x$rest" -a '!' -f "$SIPH_FILE"; do
@@ -280,11 +280,19 @@ siph_bld_source() {
             rest=`echo $rest  | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\2/'`
             SIPH_FILE="$first"/"$SIPH_SPEC".siph
         done
+        SIPH_BLD_SRCDIR="$SIPH_REPODIR/$SPEC"
+        SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$SPEC"
     fi
-    #siph_msg "$SIPH_FILE"
+
+    # Did we find it?
     if test '!' -f "$SIPH_FILE"; then
        siph_err "Could not find package $SIPH_SPEC"
     fi
+
+    # Canonicalize paths
+    SIPH_FILE=`realpath "$SIPH_FILE"`
+    SIPH_BLD_SRCDIR=`realpath "$SIPH_BLD_SRCDIR"`
+    SIPH_BLD_BUILDDIR=`realpath "$SIPH_BLD_BUILDDIR"`
 
     . "$SIPH_FILE" || siph_err "Could not source '$SIPH_FILE'"
 
@@ -296,8 +304,6 @@ siph_bld_source() {
         test "x$repo_base" = "x$SIPH_PKG_NAME" || \
             siph_err "Mismatched repo basename ($repo_base) and package name ($SIPH_PKG_NAME)"
     fi
-
-    # TODO: check that repo URL matches spec
 
     SIPH_BLD_PREFIX="$SIPH_PREFIX"
     SIPH_BLD_WORKDIR="$SIPH_WORKDIR/$SIPH_PKG_NAME"
@@ -346,10 +352,16 @@ siph_test() {
 
 
 siph_uninstall() {
-    siph_msg "INSTALL"
-    siph_bld_source "$1"
+    siph_msg "UNINSTALL"
 
-    test -d "$SIPH_BLD_DBDIR" || siph_err "package '$SIPH_PKG_NAME' not installed"
+    SIPH_PKG_NAME="$1"
+    SIPH_BLD_DBDIR="$SIPH_DBDIR/$SIPH_PKG_NAME"
+
+    if test -d "$SIPH_BLD_DBDIR"; then
+        . "$SIPH_BLD_DBDIR/siph"
+    else
+        siph_err "package '$SIPH_PKG_NAME' not installed"
+    fi
 
     # Remove files
     ( \
@@ -377,6 +389,9 @@ siph_install()
     # build and install
     siph_testpkg
     siph_bld_install
+
+
+    cp "$SIPH_FILE" "$SIPH_BLD_DBDIR/siph"
 
     rm -r "$SIPH_BLD_WORKDIR"
 }
