@@ -407,6 +407,9 @@ case "$SIPH_CMD" in
     uninstall)
         siph_uninstall $@
         ;;
+    nop)
+        true
+        ;;
     help)
         echo "Usage: siph COMMAND"
         echo ""
