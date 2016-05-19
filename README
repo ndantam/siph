@@ -55,6 +55,28 @@ Functions
 * `siph_pkg_test()`: test the package
 
 
+FAQ
+===
+
+Similar Programs
+----------------
+
+* Q: Why not use APT/DEB?
+
+  A:
+  - APT/DEB alone does not handle testing on multiple
+    platforms/distributions.
+  - APT/DEB packages are a poor fit when runtime-specific package
+    managers are involved, e.g., Common Lisp's quicklisp and Python's
+    Distutils.
+  - APT/DEB packages are somewhat heavyweight to create, in both
+    programmer and machine resources.
+
+* Q: Why not use Travis CI?
+
+  A: Travis CI does not handle dependency chains between packages,
+  except via APT.
+
 ETYMOLOGY
 =========
 https://en.wikipedia.org/wiki/Sisyphus
