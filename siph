@@ -195,7 +195,7 @@ siph_bld_compile() {
 siph_bld_test() {
     siph_msg "TEST"
     cd "$SIPH_BLD_BUILDDIR"
-    siph_pkg_test || siph_err "Package compile failed"
+    siph_pkg_test || siph_err "Package test failed"
 }
 
 
