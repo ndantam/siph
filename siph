@@ -292,6 +292,25 @@ siph_apt_get () {
     fi
 }
 
+siph_install_base () {
+    siph_apt_get -y build-essential \
+                 autoconf automake autotools libtool \
+                 cmake \
+                 sbcl curl
+}
+
+siph_install_quicklisp () {
+    if test '!' -e "$SIPH_PREFIX/quicklisp"; then
+        file=`tempfile`
+        curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp"
+        sbcl --script <<EOF
+(load "$file")
+(quicklisp-quickstart:install :path "$SIPH_PREFIX/quicklisp")
+EOF
+        rm "$file"
+    fi
+}
+
 ## Build Stubs
 
 SIPH_PKG_BRANCH="master"
