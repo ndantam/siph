@@ -1,7 +1,9 @@
 SIPHBUILD
 =========
 
-A build testing script
+Siph fetches, builds, tests, and installs packages.  It can operate
+both in the local root filesystem or under a chroot to test multiple
+OS distributions.
 
 
 SETUP
