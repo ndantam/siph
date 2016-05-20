@@ -128,12 +128,6 @@ siph_tmpclean()
     done
 }
 
-siph_rmdist()
-{
-    siph_dist_root $@
-    btrfs subvolume delete "$SIPH_DIST_ROOT"
-}
-
 
 siph_update()
 {
@@ -183,6 +177,18 @@ siph_cpdist() {
     btrfs subvolume snapshot "$SIPH_ROOT/dists/$1" "$SIPH_ROOT/dists/$2" || \
         siph_err "Could not copy dist"
 }
+
+siph_rmdist()
+{
+    siph_dist_root $@
+    btrfs subvolume delete "$SIPH_DIST_ROOT"
+}
+
+siph_mvdist()
+{
+    siph_cpdist $@ && siph_rmdist "$1"
+}
+
 
 siph_lsdist() {
     ls $@ "$SIPH_ROOT/dists"
@@ -647,6 +653,9 @@ case "$SIPH_CMD" in
     rmdist)
         siph_rmdist $@
         ;;
+    mvdist)
+        siph_mvdist $@
+        ;;
     lsdist)
         siph_lsdist $@
         ;;
@@ -688,6 +697,8 @@ case "$SIPH_CMD" in
         echo "        Delete a root directory tree"
         echo "    siph cpdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
         echo "        Copy a distribution"
+        echo "    siph mvdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
+        echo "        Rename a distribution"
         echo "    siph lsdist"
         echo "        List distributions"
         echo "    siph sh DISTRIBUTION"
