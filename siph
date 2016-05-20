@@ -56,7 +56,9 @@ siph_dist_root() {
 
 siph_distcommand() {
     siph_msg "Chrooting into $SIPH_DIST_NAME"
-    chroot "$SIPH_DIST_ROOT" /bin/sh -c "$1"
+    e="http_proxy='${http_proxy}'"
+    e="https_proxy='${https_proxy}' $e"
+    chroot "$SIPH_DIST_ROOT" /bin/sh -c "$e $1"
 }
 
 siph_tmpcommand() {
@@ -68,6 +70,38 @@ siph_tmpcommand() {
 }
 
 ## COMMANDS ##
+
+siph_dist_setup() {
+    r="$1"
+
+    mount -o bind /proc "$r/proc"
+
+    if [ -d "$SIPH_PKGDIR" ]; then
+        mkdir -p "$r/siph-pkg"
+        mount -o bind,ro "$SIPH_PKGDIR" "$r/siph-pkg"
+    fi
+
+    if [ -d "$SIPH_CCACHE_DIR" ]; then
+        mkdir -p "$r/$SIPH_DEFAULT_CCACHE_DIR"
+        mount -o bind "$SIPH_CCACHE_DIR" "$r/$SIPH_DEFAULT_CCACHE_DIR"
+    fi
+
+    cp "$SIPH_SCRIPT" "$r"
+}
+
+siph_dist_teardown() {
+    r="$1"
+
+    umount "$r/proc"
+
+    if [ -d "$r/siph-pkg" ]; then
+        umount "$r/siph-pkg"
+    fi
+
+    if [ -d "$r/$SIPH_DEFAULT_CCACHE_DIR" ]; then
+        umount "$r/$SIPH_DEFAULT_CCACHE_DIR"
+    fi
+}
 
 
 siph_tmpclone()
@@ -81,29 +115,14 @@ siph_tmpclone()
     btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT" || siph_err "Could not clone '$SIPH_DIST_ROOT'"
     mount -o bind /proc "$SIPH_TMP_ROOT/proc"
 
-    if [ -d "$SIPH_PKGDIR" ]; then
-        mkdir "$SIPH_TMP_ROOT/siph-pkg"
-        mount -o bind,ro "$SIPH_PKGDIR" "$SIPH_TMP_ROOT/siph-pkg"
-    fi
-
-    if [ -d "$SIPH_CCACHE_DIR" ]; then
-        mkdir -p "$SIPH_TMP_ROOT/$SIPH_DEFAULT_CCACHE_DIR"
-        mount -o bind "$SIPH_CCACHE_DIR" "$SIPH_TMP_ROOT/$SIPH_DEFAULT_CCACHE_DIR"
-    fi
-
-
-    cp "$SIPH_SCRIPT" "$SIPH_TMP_ROOT"
-    echo "$SIPH_TMP_ROOT"
+    siph_dist_setup "$SIPH_TMP_ROOT"
 }
 
 siph_tmpclean()
 {
     for SIPH_TMP_ROOT in $SIPH_ROOT/tmp/*; do
         if [ -d "$SIPH_TMP_ROOT" ] ; then
-            umount "$SIPH_TMP_ROOT/proc"
-            if [ -d "$SIPH_TMP_ROOT/siph-pkg" ]; then
-                umount "$SIPH_TMP_ROOT/siph-pkg"
-            fi
+            siph_dist_teardown "$SIPH_TMP_ROOT"
             btrfs subvolume delete "$SIPH_TMP_ROOT"
         fi
     done
@@ -167,6 +186,13 @@ siph_cpdist() {
 
 siph_lsdist() {
     ls $@ "$SIPH_ROOT/dists"
+}
+
+siph_shdist() {
+    siph_dist_root $@; shift;
+    siph_dist_setup "$SIPH_DIST_ROOT"
+    chroot "$SIPH_DIST_ROOT" /bin/bash
+    siph_dist_teardown "$SIPH_DIST_ROOT"
 }
 
 ## Build Wrapers
@@ -292,12 +318,20 @@ siph_bld_source() {
        siph_err "Could not find package $SIPH_SPEC"
     fi
 
-    # Canonicalize paths
+    # Canonicalize path
     SIPH_FILE=`realpath "$SIPH_FILE"`
-    SIPH_BLD_SRCDIR=`realpath "$SIPH_BLD_SRCDIR"`
-    SIPH_BLD_BUILDDIR=`realpath "$SIPH_BLD_BUILDDIR"`
 
     . "$SIPH_FILE" || siph_err "Could not source '$SIPH_FILE'"
+
+    if [ -z "$SIPH_BLD_SRCDIR" ]; then
+       SIPH_BLD_SRCDIR="$SIPH_REPODIR/$SIPH_PKG_NAME"
+    fi
+    if [ -z "$SIPH_BLD_BUILDDIR" ]; then
+       SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$SIPH_PKG_NAME"
+    fi
+    # Canonicalize paths
+    SIPH_BLD_SRCDIR=`realpath "$SIPH_BLD_SRCDIR"`
+    SIPH_BLD_BUILDDIR=`realpath "$SIPH_BLD_BUILDDIR"`
 
     test -n "$SIPH_PKG_NAME" || siph_err "No package name"
     test -n "$SIPH_PKG_REPO" || siph_err "No package repo"
@@ -344,13 +378,13 @@ siph_testroot() {
     # TODO: this looks gross
     if [ -f "$SIPH_BLD_SRCDIR/.siph" ]; then
         # native siph package
-        siph_tmpcommand "/siph testpkg ${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+        siph_tmpcommand "/siph test ${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
     else
         # using specific siph file
-        siph_tmpcommand "/siph testpkg $@"
+        siph_tmpcommand "/siph test $@"
     fi
 
-    siph_tmpclean
+    #siph_tmpclean
 }
 
 siph_test() {
@@ -399,6 +433,10 @@ siph_uninstall() {
 siph_install()
 {
     siph_bld_source "$1"
+    if [ -e "$SIPH_BLD_DBDIR" ]; then
+        siph_msg "$SIPH_PKG_NAME already installed"
+        return 0
+    fi
 
     # build and install
     siph_testpkg
@@ -438,10 +476,11 @@ siph_apt_install () {
 
 siph_install_base () {
     siph_apt_get -y build-essential \
+                 git curl \
                  autoconf automake autotools libtool \
                  ccache \
                  cmake \
-                 sbcl curl
+                 sbcl
 }
 
 
@@ -494,6 +533,13 @@ siph_deps_deb()
     fi
 }
 
+siph_deps_siph() {
+    for dep in $SIPH_PKG_DEPS_SIPH; do
+        # install via clean subprocess
+        "$0" install "$dep" || siph_err "Could not install dependency '$dep'"
+    done
+}
+
 
 ## Build Stubs
 
@@ -508,6 +554,7 @@ siph_pkg_fetch() {
 siph_pkg_deps()
 {
     siph_deps_deb
+    siph_deps_siph
 }
 
 siph_pkg_configure()
@@ -603,6 +650,9 @@ case "$SIPH_CMD" in
     lsdist)
         siph_lsdist $@
         ;;
+    sh)
+        siph_shdist $@
+        ;;
     update)
         siph_update $@
         ;;
@@ -614,9 +664,6 @@ case "$SIPH_CMD" in
         ;;
     clean)
         siph_tmpclean $@
-        ;;
-    testpkg)
-        siph_testpkg $@
         ;;
     test)
         siph_test $@
@@ -643,6 +690,8 @@ case "$SIPH_CMD" in
         echo "        Copy a distribution"
         echo "    siph lsdist"
         echo "        List distributions"
+        echo "    siph sh DISTRIBUTION"
+        echo "        Start interative shell in DISTRIBUTION"
         echo "    siph update DISTRIBUTION"
         echo "        Update a root directory tree"
         echo "    siph distinstall DISTRIBUTION packages..."
