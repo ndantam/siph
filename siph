@@ -61,7 +61,12 @@ siph_distcommand() {
 
 siph_tmpcommand() {
     siph_msg "Chrooting into $SIPH_DIST_NAME"
-    chroot "$SIPH_TMP_ROOT" /bin/sh -c "CCACHE_DIR='$SIPH_DEFAULT_CCACHE_DIR' $1"
+    e="CCACHE_DIR='$SIPH_DEFAULT_CCACHE_DIR'"
+    e="SIPH_HTTP_PROXY_HOST='$SIPH_HTTP_PROXY_HOST' $e"
+    e="SIPH_HTTP_PROXY_PORT='$SIPH_HTTP_PROXY_PORT' $e"
+    e="SIPH_HTTPS_PROXY_HOST='$SIPH_HTTPS_PROXY_HOST' $e"
+    e="SIPH_HTTPS_PROXY_PORT='$SIPH_HTTPS_PROXY_PORT' $e"
+    chroot "$SIPH_TMP_ROOT" /bin/sh -c "$e $1"
 }
 
 ## COMMANDS ##
@@ -447,14 +452,36 @@ siph_find_quicklisp ()
 
 }
 
+siph_curl ()
+{
+    # subshell
+    (
+    if [ -n "$SIPH_HTTP_PROXY_HOST" -a -n "$SIPH_HTTP_PROXY_PORT" ]; then
+        export http_proxy="http://$SIPH_HTTP_PROXY_HOST:$SIPH_HTTP_PROXY_PORT"
+    fi
+    if [ -n "$SIPH_HTTPS_PROXY_HOST" -a -n "$SIPH_HTTPS_PROXY_PORT" ]; then
+
+        export https_proxy="https://$SIPH_HTTPS_PROXY_HOST:$SIPH_HTTPS_PROXY_PORT"
+    fi
+
+    curl $@
+    ) || siph_err "Could not run curl"
+}
+
 siph_install_quicklisp () {
     siph_find_quicklisp
     if test '!' -e "$SIPH_QUICKLISP"; then
         file=`tempfile`
-        curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp" || siph_err "Could not fetch quicklisp"
+        siph_curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp" || siph_err "Could not fetch quicklisp"
+        if [ -n "$SIPH_HTTP_PROXY_HOST" -a -n "$SIPH_HTTP_PROXY_PORT" ]; then
+            ql_proxy=":proxy \"http://$SIPH_HTTP_PROXY_HOST:$SIPH_HTTP_PROXY_PORT\""
+        else
+            ql_proxy=""
+        fi
+        echo "$ql_proxy"
         sbcl --script <<EOF
 (load "$file")
-(quicklisp-quickstart:install :path "$SIPH_PREFIX/quicklisp")
+(quicklisp-quickstart:install :path "$SIPH_PREFIX/quicklisp" $ql_proxy)
 EOF
         rm "$file"
     fi
@@ -555,6 +582,7 @@ siph_load_conf /etc/siph
 siph_load_conf /etc/siph/config
 siph_load_conf ~/.config/siph
 siph_load_conf ~/.siph/config
+
 
 
 ## DISPATCH ##
