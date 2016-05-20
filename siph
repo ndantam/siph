@@ -57,6 +57,12 @@ siph_dist_root() {
     SIPH_TMP_ROOT="$SIPH_ROOT/tmp/${SIPH_DIST_NAME}"
 }
 
+siph_xargs() {
+    # POSIX xargs behaves badly on empty files
+    (while read -r arg; do
+         $@ "$arg" < /dev/null
+     done)
+}
 
 siph_dist_env() {
     e="CCACHE_DIR='$SIPH_DEFAULT_CCACHE_DIR'"
@@ -250,7 +256,7 @@ siph_bld_test() {
 siph_install_dir() {
     if test '!' -d "/$1"; then
         mkdir -v "/$1"
-        echo "$1" >> "$SIPH_BLD_DBDIR/newdirs"
+        echo "/$1" >> "$SIPH_BLD_DBDIR/newdirs"
     fi
 }
 
@@ -258,7 +264,12 @@ siph_install_file() {
     dir=`dirname "$1"`
     siph_install_dir "$dir"
     cp -av "$1" "/$1"
-    echo "$1" >> "$SIPH_BLD_DBDIR/newfiles"
+    echo "/$1" >> "$SIPH_BLD_DBDIR/newfiles"
+}
+
+siph_install_oldstuff () {
+    # args: old_files new_files
+    diff "$1" "$2" | grep '^<' | sed 's/^< //'
 }
 
 siph_bld_install() {
@@ -276,9 +287,10 @@ siph_bld_install() {
     # TODO: track created directories
 
     ## install into filesystem
+    siph_msg "Installing new files"
     touch "$SIPH_BLD_DBDIR/newfiles"
     touch "$SIPH_BLD_DBDIR/newdirs"
-    (cd "$SIPH_BLD_DESTDIR" && find) | ( \
+    (cd "$SIPH_BLD_DESTDIR" && find .) | sed -e 's!^./!!' | ( \
         cd "$SIPH_BLD_DESTDIR"
         while read -r file; do \
             if test -d "$file"; then \
@@ -288,6 +300,19 @@ siph_bld_install() {
             fi ; \
         done \
     )
+
+    ## Remove old files
+    siph_msg "Removing previous files"
+    if [ -f "$SIPH_BLD_DBDIR/files" ]; then
+        siph_install_oldstuff "$SIPH_BLD_DBDIR/files" "$SIPH_BLD_DBDIR/newfiles" | \
+            siph_xargs rm -v
+    fi
+
+    if [ -f "$SIPH_BLD_DBDIR/dirs" ]; then
+        siph_install_oldstuff "$SIPH_BLD_DBDIR/dirs" "$SIPH_BLD_DBDIR/newdirs" | tac | \
+            siph_xargs rmdir -v
+    fi
+
     mv "$SIPH_BLD_DBDIR/newfiles" "$SIPH_BLD_DBDIR/files"
     mv "$SIPH_BLD_DBDIR/newdirs" "$SIPH_BLD_DBDIR/dirs"
 }
@@ -431,18 +456,8 @@ siph_uninstall() {
     fi
 
     # Remove files
-    ( \
-        while read -r file; do \
-            rm -v "/$file"; \
-        done \
-    ) < "$SIPH_BLD_DBDIR/files"
-
-    # Remove directory
-    tac "$SIPH_BLD_DBDIR/dirs" | ( \
-        while read -r file; do \
-            rmdir -v "/$file"; \
-        done \
-    )
+    siph_xargs rm -v < "$SIPH_BLD_DBDIR/files"
+    tac "$SIPH_BLD_DBDIR/dirs" | siph_xargs rmdir -v
 
     # Remove package entry
     rm -r "$SIPH_BLD_DBDIR"
