@@ -21,6 +21,10 @@ SIPH_DBDIR="$SIPH_DEFAULT_DBDIR"
 SIPH_PKGDIR="$SIPH_DEFAULT_PKGDIR"
 SIPH_CCACHE_DIR="$SIPH_DEFAULT_CCACHE_DIR"
 
+SIPH_OPT_FETCH=yes
+SIPH_OPT_REINSTALL=no
+SIPH_OPT_MAKE_BIN=no
+SIPH_OPT_USE_BIN=yes
 
 SIPH_PREFIX=/usr/local
 
@@ -105,6 +109,10 @@ siph_dist_teardown() {
     if [ -d "$r/$SIPH_DEFAULT_CCACHE_DIR" ]; then
         umount "$r/$SIPH_DEFAULT_CCACHE_DIR"
     fi
+}
+
+siph_src_rev () {
+    git -C "$SIPH_BLD_SRCDIR" rev-parse HEAD
 }
 
 ## COMMANDS ##
@@ -255,7 +263,7 @@ siph_install_file() {
 
 siph_bld_install() {
     siph_msg "INSTALL"
-    if test -e "$SIPH_BLD_DESTDIR"; then
+    if test -d "$SIPH_BLD_DESTDIR"; then
         siph_err "Destination directory '$SIPH_BLD_DESTDIR' already exists"
     fi
     mkdir -p "$SIPH_BLD_DESTDIR"
@@ -444,9 +452,15 @@ siph_uninstall() {
 siph_install()
 {
     siph_bld_source "$1"
-    if [ -e "$SIPH_BLD_DBDIR" ]; then
-        siph_msg "$SIPH_PKG_NAME already installed"
-        return 0
+    siph_bld_fetch
+    new_version=`siph_src_rev`
+
+    if [ -d "$SIPH_BLD_DBDIR" -a -f "$SIPH_BLD_DBDIR/version" ]; then
+        read old_version < "$SIPH_BLD_DBDIR/version"
+        if test "x$new_version" = "x$old_version"; then
+            siph_msg "Package '$SIPH_PKG_NAME', revision '$new_version' already installed"
+            return 0
+        fi
     fi
 
     # build and install
@@ -455,6 +469,7 @@ siph_install()
 
 
     cp "$SIPH_FILE" "$SIPH_BLD_DBDIR/siph"
+    siph_src_rev > "$SIPH_BLD_DBDIR/version"
 
     rm -r "$SIPH_BLD_WORKDIR"
 }
@@ -640,94 +655,99 @@ siph_load_conf ~/.siph/config
 
 
 ## DISPATCH ##
-SIPH_CMD="$1"; shift
-
-if [ -z "$SIPH_CMD" ] ; then
-    siph_err "No command given"
-fi
 
 
+siph_dispatch () {
 
-case "$SIPH_CMD" in
-    mkdist)
-        siph_mkdist $@
-        ;;
-    cpdist)
-        siph_cpdist $@
-        ;;
-    rmdist)
-        siph_rmdist $@
-        ;;
-    mvdist)
-        siph_mvdist $@
-        ;;
-    lsdist)
-        siph_lsdist $@
-        ;;
-    sh)
-        siph_shdist $@
-        ;;
-    update)
-        siph_update $@
-        ;;
-    distinstall)
-        siph_distinstall $@
-        ;;
-    tmp)
-        siph_tmpclone $@
-        ;;
-    clean)
-        siph_tmpclean $@
-        ;;
-    test)
-        siph_test $@
-        ;;
-    install)
-        siph_install $@
-        ;;
-    uninstall)
-        siph_uninstall $@
-        ;;
-    nop)
-        true
-        ;;
-    help)
-        echo "Usage: siph COMMAND"
-        echo ""
-        echo "  DISTRIBUTION MANAGEMENT:"
-        echo "  ======================="
-        echo "    siph mkdist OS RELEASE [DISTRIBUTION]"
-        echo "        Create a root directory tree"
-        echo "    siph rmdist DISTRIBUTION"
-        echo "        Delete a root directory tree"
-        echo "    siph cpdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
-        echo "        Copy a distribution"
-        echo "    siph mvdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
-        echo "        Rename a distribution"
-        echo "    siph lsdist"
-        echo "        List distributions"
-        echo "    siph sh DISTRIBUTION"
-        echo "        Start interative shell in DISTRIBUTION"
-        echo "    siph update DISTRIBUTION"
-        echo "        Update a root directory tree"
-        echo "    siph distinstall DISTRIBUTION packages..."
-        echo "        Install packages in a root directory tree"
-        echo "    siph tmp DISTRIBUTION"
-        echo "        Create a temporary clone of a root tree"
-        echo "    siph clean"
-        echo "        Remove all temporary root clones"
-        echo ""
-        echo "  PACKAGE TESTING:"
-        echo "  ================"
-        echo "    siph test [DISTRIBUTION] PACKAGE"
-        echo "        Build and test PACKAGE, optionally in DISTRIBUTION"
-        echo ""
-        echo "  PACKAGE MANAGEMENT:"
-        echo "  ==================="
-        echo "    siph install PACKAGE"
-        echo "        Install PACKAGE"
-        ;;
-    *)
-        siph_err "Invalid Command '$SIPH_CMD'"
-        ;;
-esac
+    SIPH_CMD="$1"; shift
+
+    if [ -z "$SIPH_CMD" ] ; then
+        siph_err "No command given"
+    fi
+
+    case "$SIPH_CMD" in
+        mkdist)
+            siph_mkdist $@
+            ;;
+        cpdist)
+            siph_cpdist $@
+            ;;
+        rmdist)
+            siph_rmdist $@
+            ;;
+        mvdist)
+            siph_mvdist $@
+            ;;
+        lsdist)
+            siph_lsdist $@
+            ;;
+        sh)
+            siph_shdist $@
+            ;;
+        update)
+            siph_update $@
+            ;;
+        distinstall)
+            siph_distinstall $@
+            ;;
+        tmp)
+            siph_tmpclone $@
+            ;;
+        clean)
+            siph_tmpclean $@
+            ;;
+        test)
+            siph_test $@
+            ;;
+        install)
+            siph_install $@
+            ;;
+        uninstall)
+            siph_uninstall $@
+            ;;
+        nop)
+            true
+            ;;
+        help)
+            echo "Usage: siph COMMAND"
+            echo ""
+            echo "  DISTRIBUTION MANAGEMENT:"
+            echo "  ======================="
+            echo "    siph mkdist OS RELEASE [DISTRIBUTION]"
+            echo "        Create a root directory tree"
+            echo "    siph rmdist DISTRIBUTION"
+            echo "        Delete a root directory tree"
+            echo "    siph cpdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
+            echo "        Copy a distribution"
+            echo "    siph mvdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
+            echo "        Rename a distribution"
+            echo "    siph lsdist"
+            echo "        List distributions"
+            echo "    siph sh DISTRIBUTION"
+            echo "        Start interative shell in DISTRIBUTION"
+            echo "    siph update DISTRIBUTION"
+            echo "        Update a root directory tree"
+            echo "    siph distinstall DISTRIBUTION packages..."
+            echo "        Install packages in a root directory tree"
+            echo "    siph tmp DISTRIBUTION"
+            echo "        Create a temporary clone of a root tree"
+            echo "    siph clean"
+            echo "        Remove all temporary root clones"
+            echo ""
+            echo "  PACKAGE TESTING:"
+            echo "  ================"
+            echo "    siph test [DISTRIBUTION] PACKAGE"
+            echo "        Build and test PACKAGE, optionally in DISTRIBUTION"
+            echo ""
+            echo "  PACKAGE MANAGEMENT:"
+            echo "  ==================="
+            echo "    siph install PACKAGE"
+            echo "        Install PACKAGE"
+            ;;
+        *)
+            siph_err "Invalid Command '$SIPH_CMD'"
+            ;;
+    esac
+}
+
+siph_dispatch $@
