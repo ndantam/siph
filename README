@@ -26,8 +26,20 @@ SETUP
     `siph mkdist debian jessie`
 
 
-.SIPH Files
+SIPH Files
 ===========
+
+Configure Variables
+------------------
+
+The files `~/.siph/config`, `~/.config/siph`, and `/etc/siph/config`
+are sourced as shell scripts by the `siph` driver script.  The
+following variables may be defined:
+
+* `SIPH_MAKE_J`: number of parallel processes in make, e.g., `SIPH_MAKE_J=6`
+* `http_proxy`: HTTP proxy to use, e.g., `http_proxy="http://127.0.0.1:8123"`
+* `https_proxy`: HTTPS proxy to use, e.g., `https_proxy="http://127.0.0.1:8123"`
+
 
 Package Variables
 -----------------

@@ -62,10 +62,8 @@ siph_distcommand() {
 siph_tmpcommand() {
     siph_msg "Chrooting into $SIPH_DIST_NAME"
     e="CCACHE_DIR='$SIPH_DEFAULT_CCACHE_DIR'"
-    e="SIPH_HTTP_PROXY_HOST='$SIPH_HTTP_PROXY_HOST' $e"
-    e="SIPH_HTTP_PROXY_PORT='$SIPH_HTTP_PROXY_PORT' $e"
-    e="SIPH_HTTPS_PROXY_HOST='$SIPH_HTTPS_PROXY_HOST' $e"
-    e="SIPH_HTTPS_PROXY_PORT='$SIPH_HTTPS_PROXY_PORT' $e"
+    e="http_proxy='$http_proxy' $e"
+    e="https_proxy='$https_proxy' $e"
     chroot "$SIPH_TMP_ROOT" /bin/sh -c "$e $1"
 }
 
@@ -415,19 +413,19 @@ siph_install()
 
 ## Portability Functions
 
+siph_proxy_setup() {
+    if [ -n "$http_proxy" ]; then
+        export http_proxy
+    fi
+    if [ -n "$https_proxy" ]; then
+        export https_proxy
+    fi
+}
+
 siph_apt_get () {
     if test -n `which apt-get` ; then
         if test 0 = `id -u`; then
-            ( if [ -n "$SIPH_HTTP_PROXY_HOST" -a -n "$SIPH_HTTP_PROXY_PORT" ]; then
-                  export http_proxy="http://$SIPH_HTTP_PROXY_HOST:$SIPH_HTTP_PROXY_PORT"
-              fi
-                if [ -n "$SIPH_HTTPS_PROXY_HOST" -a -n "$SIPH_HTTPS_PROXY_PORT" ]; then
-
-                    export https_proxy="https://$SIPH_HTTPS_PROXY_HOST:$SIPH_HTTPS_PROXY_PORT"
-                fi
-                echo $http_proxy
-                apt-get $@
-            )
+            ( siph_proxy_setup && apt-get $@ )
         else
             echo "Not root, skipping apt-get install"
         fi
@@ -464,17 +462,8 @@ siph_find_quicklisp ()
 siph_curl ()
 {
     # subshell
-    (
-    if [ -n "$SIPH_HTTP_PROXY_HOST" -a -n "$SIPH_HTTP_PROXY_PORT" ]; then
-        export http_proxy="http://$SIPH_HTTP_PROXY_HOST:$SIPH_HTTP_PROXY_PORT"
-    fi
-    if [ -n "$SIPH_HTTPS_PROXY_HOST" -a -n "$SIPH_HTTPS_PROXY_PORT" ]; then
-
-        export https_proxy="https://$SIPH_HTTPS_PROXY_HOST:$SIPH_HTTPS_PROXY_PORT"
-    fi
-
-    curl $@
-    ) || siph_err "Could not run curl"
+    ( siph_proxy_setup && curl $@ ) || \
+        siph_err "Could not run curl"
 }
 
 siph_install_quicklisp () {
@@ -482,12 +471,11 @@ siph_install_quicklisp () {
     if test '!' -e "$SIPH_QUICKLISP"; then
         file=`tempfile`
         siph_curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp" || siph_err "Could not fetch quicklisp"
-        if [ -n "$SIPH_HTTP_PROXY_HOST" -a -n "$SIPH_HTTP_PROXY_PORT" ]; then
-            ql_proxy=":proxy \"http://$SIPH_HTTP_PROXY_HOST:$SIPH_HTTP_PROXY_PORT\""
+        if [ -n "$http_proxy" ]; then
+            ql_proxy=":proxy \"$http_proxy\""
         else
             ql_proxy=""
         fi
-        echo "$ql_proxy"
         sbcl --script <<EOF
 (load "$file")
 (quicklisp-quickstart:install :path "$SIPH_PREFIX/quicklisp" $ql_proxy)
@@ -587,7 +575,6 @@ siph_load_conf()
 }
 
 
-siph_load_conf /etc/siph
 siph_load_conf /etc/siph/config
 siph_load_conf ~/.config/siph
 siph_load_conf ~/.siph/config
