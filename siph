@@ -418,7 +418,16 @@ siph_install()
 siph_apt_get () {
     if test -n `which apt-get` ; then
         if test 0 = `id -u`; then
-            apt-get $@
+            ( if [ -n "$SIPH_HTTP_PROXY_HOST" -a -n "$SIPH_HTTP_PROXY_PORT" ]; then
+                  export http_proxy="http://$SIPH_HTTP_PROXY_HOST:$SIPH_HTTP_PROXY_PORT"
+              fi
+                if [ -n "$SIPH_HTTPS_PROXY_HOST" -a -n "$SIPH_HTTPS_PROXY_PORT" ]; then
+
+                    export https_proxy="https://$SIPH_HTTPS_PROXY_HOST:$SIPH_HTTPS_PROXY_PORT"
+                fi
+                echo $http_proxy
+                apt-get $@
+            )
         else
             echo "Not root, skipping apt-get install"
         fi
