@@ -13,6 +13,35 @@ updates and eases local source code modification.
 SETUP
 =====
 
+Installing Packages Locally
+---------------------------
+
+1. Create a siph directory:
+
+    `mkdir ~/.siph`
+
+2. Get the siph repo install script and config file:
+
+    `cd ~/.siph && git clone https://github.com/ndantam/siph.git`
+    `cp ~/.siph/siph/config.example ~/.siph/config`
+    `sudo cp ~/.siph/siph/siph /usr/local/bin`
+
+3. Get the siph package repo:
+
+    `cd ~/.siph && git clone https://github.com/ndantam/siph-pkg.git`
+
+4. Install something:
+
+    `sudo siph install amino`
+
+
+Testing Packaging in Different Roots
+------------------------------------
+
+Siph can manage multiple OS distributions to test packages on
+different platforms.  Distributions roots are stored via BTRFS,
+enabling low-cost snapshots for new tests.
+
 1. Create a BTRFS volume for SIPH to use.  For example, if using LVM:
 
     `lvcreate --size 40G --name siph myvg`

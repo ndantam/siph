@@ -1,0 +1,34 @@
+#### conf.example
+####
+#### This is an example configuration file for Siph.  It is a shell
+#### script that is sourced by the siph driver command.
+
+
+## SIPH_REPODIR: location to store repositories
+SIPH_REPODIR=~/.siph/repo
+
+## SIPH_WORKDIR: location to store working files during builds
+SIPH_WORKDIR=~/.siph/work
+
+## SIPH_DBDIR: location to information on installed packages
+SIPH_DBDIR=~/.siph/db
+
+## SIPH_PKGDIR: location to search for siph package files
+SIPH_PKGDIR=~/.siph/siph-pkg
+
+## SIPH_MAKE_J: Number of simultaneous jobs for make
+SIPH_MAKE_J=2
+
+
+## Siph can use a proxy for HTTP and HTTPS in order to reduce
+## bandwidth usage (and be friendly to our upstreams).  A caching
+## proxy will speed up APT and Quicklisp downloads.  Uncomment and set
+## the following variables if you have a proxy to use:
+##
+# http_proxy="http://127.0.0.1:8123"
+# https_proxy="http://127.0.0.1:8123"
+
+
+# Local Variables:
+# mode: shell-script
+# End:
