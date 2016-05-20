@@ -5,6 +5,10 @@ Siph fetches, builds, tests, and installs packages.  It can operate
 both in the local root filesystem or under a chroot to test multiple
 OS distributions.
 
+Compared to traditional package managers, Siph eschews tarballs and
+patches, instead operating directly on upstream git repositories.
+Directly using the upstream repository reduces network usage for
+updates and eases local source code modification.
 
 SETUP
 =====
