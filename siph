@@ -54,11 +54,16 @@ siph_dist_root() {
 }
 
 
+siph_dist_env() {
+    e="CCACHE_DIR='$SIPH_DEFAULT_CCACHE_DIR'"
+    e="http_proxy='$http_proxy' $e"
+    e="https_proxy='$https_proxy' $e"
+    echo "$e"
+}
+
 siph_distcommand() {
     siph_msg "Chrooting into $SIPH_DIST_NAME"
-    e="http_proxy='${http_proxy}'"
-    e="https_proxy='${https_proxy}' $e"
-    chroot "$SIPH_DIST_ROOT" /bin/sh -c "$e $1"
+    chroot `siph_dist_env` /bin/sh -c "$e $1"
 }
 
 siph_tmpcommand() {
@@ -69,7 +74,6 @@ siph_tmpcommand() {
     chroot "$SIPH_TMP_ROOT" /bin/sh -c "$e $1"
 }
 
-## COMMANDS ##
 
 siph_dist_setup() {
     r="$1"
@@ -103,6 +107,7 @@ siph_dist_teardown() {
     fi
 }
 
+## COMMANDS ##
 
 siph_tmpclone()
 {
@@ -197,7 +202,7 @@ siph_lsdist() {
 siph_shdist() {
     siph_dist_root $@; shift;
     siph_dist_setup "$SIPH_DIST_ROOT"
-    chroot "$SIPH_DIST_ROOT" /bin/bash
+    sh -c "`siph_dist_env` chroot \"$SIPH_DIST_ROOT\" /bin/bash"
     siph_dist_teardown "$SIPH_DIST_ROOT"
 }
 
