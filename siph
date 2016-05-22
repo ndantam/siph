@@ -358,13 +358,12 @@ siph_bld_source() {
         # Remote Repo
         siph_msg "Syncing repo '$SIPH_SPEC'"
         repo_base=`echo "$SIPH_SPEC" | sed -e 's!.*/\([^/.]*\)\(.git\)\?!\1!'`
-        siph_git_quiet
         if test -e "$SIPH_REPODIR/$repo_base"; then
             cd "$SIPH_REPODIR/$repo_base"
-            git pull "$SIPH_GIT_QUIET" || siph_err "Could not pull"
+            siph_git pull || siph_err "Could not pull"
         else
             cd "$SIPH_REPODIR"
-            git clone "$SIPH_GIT_QUIET" "$SIPH_SPEC" || siph_err "Could not clone repo"
+            siph_git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
         fi
         SIPH_BLD_SRCDIR="$SIPH_REPODIR/$repo_base"
         SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$repo_base"
@@ -440,7 +439,7 @@ siph_testroot() {
     # clone sources to tmp
     siph_msg "srcdir: $SIPH_BLD_SRCDIR"
     mkdir -p "${SIPH_TMP_ROOT}/${SIPH_DEFAULT_REPODIR}"
-    git clone "$SIPH_BLD_SRCDIR" "${SIPH_TMP_ROOT}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+    siph_git clone "$SIPH_BLD_SRCDIR" "${SIPH_TMP_ROOT}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
 
     # Chroot and test
     siph_msg "Chrooting into temporary $SIPH_DIST_NAME"
@@ -517,11 +516,12 @@ siph_install()
 
 ## Portability Functions
 
-siph_git_quiet() {
+siph_git() {
+    c="$1"; shift
     if [ yes = "$SIPH_OPT_QUIET" ] ; then
-        SIPH_GIT_QUIET="-q"
+        git "$c" -q $@
     else
-        SIPH_GIT_QUIET=""
+        git "$c" $@
     fi
 }
 
@@ -669,16 +669,15 @@ siph_workdir () {
 siph_fetch_git () {
     mkdir -p "$SIPH_REPODIR"
     repo="$SIPH_REPODIR/$SIPH_PKG_NAME"
-    siph_git_quiet
     if [ -d "$repo" ]; then
         # TODO: check if repo URL has changed
         siph_msg "Updating '$repo'"
         cd "$repo"
-        git fetch "$SIPH_GIT_QUIET" && git checkout "$SIPH_GIT_QUIET" "$SIPH_PKG_BRANCH"
+        siph_git fetch && siph_git checkout "$SIPH_PKG_BRANCH"
     else
         siph_msg "Cloning '$SIPH_PKG_REPO'"
-        git clone "$SIPH_GIT_QUIET" "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
-        cd "$repo" && git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
+        siph_git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
+        cd "$repo" && siph_git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
     fi
 
     SIPH_BLD_SRCDIR="$repo"
