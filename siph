@@ -138,7 +138,6 @@ siph_tmpclone()
     mkdir -p "$SIPH_ROOT/tmp"
     mkdir -p "$SIPH_ROOT/ccache"
     btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT" || siph_err "Could not clone '$SIPH_DIST_ROOT'"
-    mount -o bind /proc "$SIPH_TMP_ROOT/proc"
 
     siph_dist_setup "$SIPH_TMP_ROOT"
 }
