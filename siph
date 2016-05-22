@@ -79,14 +79,13 @@ siph_dist_env() {
 
 siph_distcommand() {
     siph_msg "Chrooting into $SIPH_DIST_NAME"
-    chroot `siph_dist_env` /bin/sh -c "$e $1"
+    e=`siph_dist_env`
+    chroot "$SIPH_DIST_ROOT"  /bin/sh -c "$e $1"
 }
 
 siph_tmpcommand() {
     siph_msg "Chrooting into $SIPH_DIST_NAME"
-    e="CCACHE_DIR='$SIPH_DEFAULT_CCACHE_DIR'"
-    e="http_proxy='$http_proxy' $e"
-    e="https_proxy='$https_proxy' $e"
+    e=`siph_dist_env`
     chroot "$SIPH_TMP_ROOT" /bin/sh -c "$e $1"
 }
 
