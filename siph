@@ -553,7 +553,7 @@ siph_apt_install () {
     siph_apt_get -y install $@
 }
 
-SIPH_DEPS_DEB_BASE="build-essential git curl autoconf automake libtool ccache cmake sbcl"
+SIPH_DEPS_DEB_BASE="build-essential git curl autoconf autoconf-archive automake libtool ccache cmake sbcl"
 
 
 siph_find_quicklisp ()
