@@ -513,6 +513,10 @@ siph_install()
     rm -r "$SIPH_BLD_WORKDIR"
 }
 
+siph_installbase() {
+    siph_apt_install $SIPH_DEPS_DEB_BASE
+}
+
 
 ## Portability Functions
 
@@ -545,17 +549,11 @@ siph_apt_get () {
 }
 
 siph_apt_install () {
+    siph_apt_get update
     siph_apt_get -y install $@
 }
 
-siph_install_base () {
-    siph_apt_get -y build-essential \
-                 git curl \
-                 autoconf automake autotools libtool \
-                 ccache \
-                 cmake \
-                 sbcl
-}
+SIPH_DEPS_DEB_BASE="build-essential git curl autoconf automake libtool ccache cmake sbcl"
 
 
 siph_find_quicklisp ()
@@ -602,9 +600,7 @@ EOF
 
 siph_deps_deb()
 {
-    if [ -n "$SIPH_PKG_DEPS_DEB" ]; then
-        siph_apt_install $SIPH_PKG_DEPS_DEB
-    fi
+    siph_apt_install $SIPH_PKG_DEPS_DEB $SIPH_DEPS_DEB_BASE
 }
 
 siph_deps_siph() {
@@ -750,6 +746,9 @@ siph_dispatch () {
         install)
             siph_install $@
             ;;
+        installbase)
+            siph_installbase $@
+            ;;
         uninstall)
             siph_uninstall $@
             ;;
@@ -794,6 +793,8 @@ siph_dispatch () {
             echo "  ==================="
             echo "    siph install PACKAGE"
             echo "        Install PACKAGE"
+            echo "    siph installbase"
+            echo "        Install base siph packages"
             ;;
         *)
             siph_err "Invalid Command '$SIPH_CMD'"
