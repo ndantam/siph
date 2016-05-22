@@ -32,7 +32,7 @@ Installing Packages Locally
 
 4. Install something:
 
-    `sudo siph install amino`
+    `sudo siph install ompl`
 
 
 Testing Packaging in Different Roots
