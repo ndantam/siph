@@ -27,6 +27,7 @@ SIPH_OPT_MAKE_BIN=no
 SIPH_OPT_USE_BIN=yes
 SIPH_OPT_RECURSIVE=no
 SIPH_OPT_QUIET=no
+SIPH_OPT_USER=""
 
 SIPH_PREFIX=/usr/local
 
@@ -248,7 +249,7 @@ siph_cmd_deps () {
 
 siph_bld_deps() {
     siph_msg "DEPS"
-    mkdir -p "$SIPH_BLD_BUILDDIR"
+    siph_su mkdir -p "$SIPH_BLD_BUILDDIR"
     cd "$SIPH_BLD_BUILDDIR" && \
         siph_pkg_deps || \
             siph_err "Package dependencies failed"
@@ -256,7 +257,7 @@ siph_bld_deps() {
 
 siph_bld_fetch() {
     siph_msg "FETCH"
-    mkdir -p "$SIPH_BLD_BUILDDIR"
+    siph_su mkdir -p "$SIPH_BLD_BUILDDIR"
     cd "$SIPH_BLD_BUILDDIR" && \
         siph_pkg_fetch \
             || siph_err "Package fetch failed"
@@ -305,11 +306,11 @@ siph_bld_install() {
     if test -d "$SIPH_BLD_DESTDIR"; then
         siph_err "Destination directory '$SIPH_BLD_DESTDIR' already exists"
     fi
-    mkdir -p "$SIPH_BLD_DESTDIR"
+    siph_su mkdir -p "$SIPH_BLD_DESTDIR"
     siph_pkg_install || siph_err "Package install failed"
 
     # Record files
-    mkdir -p "$SIPH_BLD_DBDIR"
+    siph_su mkdir -p "$SIPH_BLD_DBDIR"
 
     # TODO: handle merging over installed package
     # TODO: track created directories
@@ -365,13 +366,15 @@ siph_bld_source() {
         # Remote Repo
         siph_msg "Syncing repo '$SIPH_SPEC'"
         repo_base=`echo "$SIPH_SPEC" | sed -e 's!.*/\([^/.]*\)\(.git\)\?!\1!'`
-        if test -e "$SIPH_REPODIR/$repo_base"; then
-            cd "$SIPH_REPODIR/$repo_base"
-            siph_git pull || siph_err "Could not pull"
-        else
-            mkdir -p "$SIPH_REPODIR"
-            cd "$SIPH_REPODIR"
-            siph_git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
+        if [ yes = "$SIPH_OPT_FETCH" ]; then
+            if test -e "$SIPH_REPODIR/$repo_base"; then
+                cd "$SIPH_REPODIR/$repo_base"
+                siph_git pull || siph_err "Could not pull"
+            else
+                siph_su mkdir -p "$SIPH_REPODIR"
+                cd "$SIPH_REPODIR"
+                siph_git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
+            fi
         fi
         SIPH_BLD_SRCDIR="$SIPH_REPODIR/$repo_base"
         SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$repo_base"
@@ -406,6 +409,8 @@ siph_bld_source() {
        SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$SIPH_PKG_NAME"
     fi
     # Canonicalize paths
+    siph_su mkdir -vp "$SIPH_BLD_SRCDIR"
+    siph_su mkdir -vp "$SIPH_BLD_BUILDDIR"
     SIPH_BLD_SRCDIR=`realpath "$SIPH_BLD_SRCDIR"`
     SIPH_BLD_BUILDDIR=`realpath "$SIPH_BLD_BUILDDIR"`
 
@@ -535,14 +540,23 @@ siph_ldconfig () {
     fi
 }
 
+siph_su() {
+    if [ -z "$SIPH_OPT_USER" ] ; then
+        $@
+    else
+        su "$SIPH_OPT_USER" -c "$*"
+    fi
+}
+
 siph_git() {
     c="$1"; shift
     if [ yes = "$SIPH_OPT_QUIET" ] ; then
-        git "$c" -q $@
+        siph_su git "$c" -q $@
     else
-        git "$c" $@
+        siph_su git "$c" $@
     fi
 }
+
 
 siph_proxy_setup() {
     if [ -n "$http_proxy" ]; then
@@ -673,10 +687,6 @@ siph_pkg_install()
 
 
 ## Build Helpers
-siph_workdir () {
-    mkdir -p
-}
-
 siph_fetch_git () {
     mkdir -p "$SIPH_REPODIR"
     repo="$SIPH_REPODIR/$SIPH_PKG_NAME"
@@ -707,16 +717,16 @@ siph_load_conf()
 }
 
 
-siph_load_conf /etc/siph/config
-siph_load_conf ~/.config/siph
-siph_load_conf ~/.siph/config
-
-
 
 ## DISPATCH ##
 
 
 siph_dispatch () {
+    siph_load_conf /etc/siph/config
+    siph_load_conf ~/.config/siph
+    siph_load_conf ~/.siph/config
+
+
 
     SIPH_CMD="$1"; shift
 
@@ -817,20 +827,30 @@ siph_dispatch () {
     esac
 }
 
-siph_getopt () {
+
+while true; do
     case "$1" in
         -r)
             SIPH_OPT_RECURSIVE=yes
+            shift;
+            ;;
+        -F)
+            SIPH_OPT_FETCH=no
+            shift;
+            ;;
+        -u)
+            SIPH_OPT_USER="$2"
+            HOME=`eval echo ~$SIPH_OPT_USER`
+            shift;
+            shift;
+            ;;
+        -s)
+            shift
+            exec sudo  "$0" -u `id -un` $@
             ;;
         *)
-            return 1;
+            siph_dispatch $@
+            exit;
             ;;
     esac
-}
-
-while siph_getopt "$1"; do
-    shift
 done
-
-
-siph_dispatch $@
