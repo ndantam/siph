@@ -362,6 +362,7 @@ siph_bld_source() {
             cd "$SIPH_REPODIR/$repo_base"
             siph_git pull || siph_err "Could not pull"
         else
+            mkdir -p "$SIPH_REPODIR"
             cd "$SIPH_REPODIR"
             siph_git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
         fi
