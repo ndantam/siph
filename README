@@ -22,9 +22,9 @@ Installing Packages Locally
 
 2. Get the siph repo install script and config file:
 
-    `cd ~/.siph && git clone https://github.com/ndantam/siph.git`
-    `cp ~/.siph/siph/config.example ~/.siph/config`
-    `sudo cp ~/.siph/siph/siph /usr/local/bin`
+    - `cd ~/.siph && git clone https://github.com/ndantam/siph.git`
+    - `cp ~/.siph/siph/config.example ~/.siph/config`
+    - `sudo cp ~/.siph/siph/siph /usr/local/bin`
 
 3. Get the siph package repo:
 
@@ -46,15 +46,13 @@ enabling low-cost snapshots for new tests.
 
 1. Create a BTRFS volume for SIPH to use.  For example, if using LVM:
 
-    `lvcreate --size 40G --name siph myvg`
-
-    `mkfs -t btrfs /dev/mapper/myvg-siph`
+    - `lvcreate --size 40G --name siph myvg`
+    - `mkfs -t btrfs /dev/mapper/myvg-siph`
 
 2. Mount the volume group (and/or add suitable line to /etc/fstab)
 
-    `mkdir /var/cache/siph`
-
-    `mount /dev/mapper/myvg-siph /var/cache/siph`
+    - `mkdir /var/cache/siph`
+    - `mount /dev/mapper/myvg-siph /var/cache/siph`
 
 3. Create a distribution
 
