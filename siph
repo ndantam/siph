@@ -265,20 +265,23 @@ siph_bld_fetch() {
 
 siph_bld_configure() {
     siph_msg "CONFIGURE"
-    cd "$SIPH_BLD_BUILDDIR"
-    siph_pkg_configure || siph_err "Package configure failed"
+    cd "$SIPH_BLD_BUILDDIR" && \
+        siph_pkg_configure || \
+            siph_err "Package configure failed"
 }
 
 siph_bld_compile() {
     siph_msg "COMPILE"
-    cd "$SIPH_BLD_BUILDDIR"
-    siph_pkg_compile || siph_err "Package compile failed"
+    cd "$SIPH_BLD_BUILDDIR" && \
+        siph_pkg_compile || \
+            siph_err "Package compile failed"
 }
 
 siph_bld_test() {
     siph_msg "TEST"
-    cd "$SIPH_BLD_BUILDDIR"
-    siph_pkg_test || siph_err "Package test failed"
+    cd "$SIPH_BLD_BUILDDIR" && \
+        siph_pkg_test || \
+            siph_err "Package test failed"
 }
 
 
@@ -303,12 +306,18 @@ siph_install_oldstuff () {
 
 siph_bld_install() {
     siph_msg "INSTALL"
-    if test -d "$SIPH_BLD_DESTDIR"; then
-        siph_err "Destination directory '$SIPH_BLD_DESTDIR' already exists"
-    fi
+    # if test -d "$SIPH_BLD_DESTDIR"; then
+    #     siph_err "Destination directory '$SIPH_BLD_DESTDIR' already exists"
+    # fi
     siph_su mkdir -p "$SIPH_BLD_DESTDIR"
-    siph_pkg_install || siph_err "Package install failed"
 
+    cd "$SIPH_BLD_BUILDDIR" && \
+        siph_pkg_install \
+            || siph_err "Package install failed"
+
+}
+
+siph_bld_merge() {
     # Record files
     siph_su mkdir -p "$SIPH_BLD_DBDIR"
 
@@ -319,16 +328,16 @@ siph_bld_install() {
     siph_msg "Installing new files"
     touch "$SIPH_BLD_DBDIR/newfiles"
     touch "$SIPH_BLD_DBDIR/newdirs"
-    (cd "$SIPH_BLD_DESTDIR" && find .) | sed -e 's!^./!!' | ( \
-        cd "$SIPH_BLD_DESTDIR"
-        while read -r file; do \
-            if test -d "$file"; then \
-                siph_install_dir "$file"; \
-            else  \
-                siph_install_file "$file"; \
-            fi ; \
-        done \
-    )
+    cd "$SIPH_BLD_DESTDIR" || siph_err "No destdir"
+    find . | sed -e 's!^./!!' | ( \
+            while read -r file; do \
+                if test -d "$file"; then \
+                    siph_install_dir "$file"; \
+                else  \
+                    siph_install_file "$file"; \
+                fi ; \
+            done \
+        )
 
     ## Remove old files
     siph_msg "Removing previous files"
@@ -337,16 +346,32 @@ siph_bld_install() {
             siph_xargs rm -v
     fi
 
-    if [ -f "$SIPH_BLD_DBDIR/dirs" ]; then
-        siph_install_oldstuff "$SIPH_BLD_DBDIR/dirs" "$SIPH_BLD_DBDIR/newdirs" | tac | \
-            siph_xargs rmdir -v
-    fi
+    ## TODO: handle this better
+    # if [ -f "$SIPH_BLD_DBDIR/dirs" ]; then
+    #     siph_install_oldstuff "$SIPH_BLD_DBDIR/dirs" "$SIPH_BLD_DBDIR/newdirs" | tac | \
+    #         siph_xargs rmdir -v
+    # fi
 
     mv "$SIPH_BLD_DBDIR/newfiles" "$SIPH_BLD_DBDIR/files"
     mv "$SIPH_BLD_DBDIR/newdirs" "$SIPH_BLD_DBDIR/dirs"
 
     ## ldconfig
     siph_ldconfig
+
+
+    ## Record installation
+    siph_su mkdir -p "$SIPH_BLD_DBDIR/siph"
+    cp "$SIPH_FILE" "$SIPH_BLD_DBDIR/siph"
+    siph_src_rev > "$SIPH_BLD_DBDIR/version"
+
+    rm -r "$SIPH_BLD_WORKDIR"
+}
+
+siph_bld_clean() {
+    siph_msg "CLEAN"
+    cd "$SIPH_BLD_BUILDDIR" && \
+        siph_pkg_clean || \
+            siph_err "Package install failed"
 }
 
 siph_bld_source() {
@@ -388,8 +413,8 @@ siph_bld_source() {
             rest=`echo $rest  | sed -e 's/^:\?\([^:]*\)\(:\(.*\)\)\?/\2/'`
             SIPH_FILE="$first"/"$SIPH_SPEC".siph
         done
-        SIPH_BLD_SRCDIR="$SIPH_REPODIR/$SPEC"
-        SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$SPEC"
+        SIPH_BLD_SRCDIR="$SIPH_REPODIR/$SIPH_SPEC"
+        SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$SIPH_SPEC"
     fi
 
     # Did we find it?
@@ -400,6 +425,7 @@ siph_bld_source() {
     # Canonicalize path
     SIPH_FILE=`realpath "$SIPH_FILE"`
 
+    siph_msg "FILE: '$SIPH_FILE'"
     . "$SIPH_FILE" || siph_err "Could not source '$SIPH_FILE'"
 
     if [ -z "$SIPH_BLD_SRCDIR" ]; then
@@ -518,12 +544,9 @@ siph_install()
     # build and install
     siph_testpkg
     siph_bld_install
+    siph_bld_merge
 
 
-    cp "$SIPH_FILE" "$SIPH_BLD_DBDIR/siph"
-    siph_src_rev > "$SIPH_BLD_DBDIR/version"
-
-    rm -r "$SIPH_BLD_WORKDIR"
 }
 
 siph_installbase() {
@@ -531,11 +554,46 @@ siph_installbase() {
 }
 
 
+siph_pkg() {
+    siph_bld_source "$1"; shift
+    for subcmd in $@; do
+        case "$subcmd" in
+            fetch)
+                siph_bld_fetch
+                ;;
+            deps)
+                siph_bld_deps
+                ;;
+            configure)
+                siph_bld_configure
+                ;;
+            compile)
+                siph_bld_compile
+                ;;
+            test)
+                siph_bld_test
+                ;;
+            install)
+                siph_bld_install
+                ;;
+            merge)
+                siph_bld_merge
+                ;;
+            clean)
+                siph_bld_clean
+                ;;
+            *)
+                siph_err "Unrecognized pkg command: '$subcmd'"
+                ;;
+        esac
+    done
+}
+
 
 ## Portability Functions
 
 siph_ldconfig () {
-    if [ -n `which ldconfig` ]; then
+    if [ -f "`which ldconfig`" ]; then
         ldconfig
     fi
 }
@@ -682,7 +740,19 @@ siph_pkg_test() {
 
 siph_pkg_install()
 {
-    make install DESTDIR="$SIPH_BLD_DESTDIR"
+    echo bif
+    pwd
+    if [ -f Makefile ] ; then
+        echo foo
+        make install DESTDIR="$SIPH_BLD_DESTDIR"
+    fi
+}
+
+siph_pkg_clean()
+{
+    if [ -f Makefile ] ; then
+        make clean
+    fi
 }
 
 
@@ -764,6 +834,9 @@ siph_dispatch () {
             ;;
         clean)
             siph_tmpclean $@
+            ;;
+        pkg)
+            siph_pkg $@
             ;;
         test)
             siph_test $@
