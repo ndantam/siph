@@ -38,6 +38,8 @@ Installing Packages Locally
 Testing Packaging in Different Roots
 ------------------------------------
 
+(skip this part if you only want to install packages locally)
+
 Siph can manage multiple OS distributions to test packages on
 different platforms.  Distributions roots are stored via BTRFS,
 enabling low-cost snapshots for new tests.
