@@ -19,14 +19,22 @@ SIPH_PKGDIR=~/.siph/siph-pkg
 ## SIPH_MAKE_J: Number of simultaneous jobs for make
 SIPH_MAKE_J=2
 
+## SIPH_PREFIX: Installation directory prefix
+# SIPH_PREFIX=/usr/local
 
 ## Siph can use a proxy for HTTP and HTTPS in order to reduce
 ## bandwidth usage (and be friendly to our upstreams).  A caching
 ## proxy will speed up APT and Quicklisp downloads.  Uncomment and set
-## the following variables if you have a proxy to use:
+## the following variables if you have a proxy to use.
 ##
-# http_proxy="http://127.0.0.1:8123"
-# https_proxy="http://127.0.0.1:8123"
+## http_proxy="http://127.0.0.1:8123"
+## https_proxy="http://127.0.0.1:8123"
+##
+## http_proxy: HTTP proxy server, used by APT and Quicklisp
+# http_proxy=""
+#
+## https_proxy: HTTPS proxy server, used by APT and Quicklisp
+# https_proxy=""
 
 
 # Local Variables:

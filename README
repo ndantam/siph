@@ -65,14 +65,9 @@ SIPH Files
 Configure Variables
 ------------------
 
-The files `~/.siph/config`, `~/.config/siph`, and `/etc/siph/config`
-are sourced as shell scripts by the `siph` driver script.  The
-following variables may be defined:
-
-* `SIPH_MAKE_J`: number of parallel processes in make, e.g., `SIPH_MAKE_J=6`
-* `http_proxy`: HTTP proxy to use, e.g., `http_proxy="http://127.0.0.1:8123"`
-* `https_proxy`: HTTPS proxy to use, e.g., `https_proxy="http://127.0.0.1:8123"`
-
+The files `/etc/siph/config` and `~/.siph/config` are sourced as shell
+scripts by the `siph` driver script.  See `./config.example` for a
+description of the variables.
 
 Package Variables
 -----------------
@@ -82,6 +77,8 @@ Follow naming convention `SIPH_PKG_*`.  Set in the .siph file
 * `SIPH_PKG_NAME`: Name of the package
 * `SIPH_PKG_REPO`: Package repository URL
 * `SIPH_PKG_BRANCH`: Package branch to use
+* `SIPH_PKG_DEPS_DEB`: Debian (DEB) dependencies of the package
+* `SIPH_PKG_DEPS_SIPH`: Siph dependencies of the package
 
 Build Variables
 ---------------
