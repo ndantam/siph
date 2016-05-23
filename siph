@@ -339,6 +339,9 @@ siph_bld_install() {
 
     mv "$SIPH_BLD_DBDIR/newfiles" "$SIPH_BLD_DBDIR/files"
     mv "$SIPH_BLD_DBDIR/newdirs" "$SIPH_BLD_DBDIR/dirs"
+
+    ## ldconfig
+    siph_ldconfig
 }
 
 siph_bld_source() {
@@ -519,7 +522,14 @@ siph_installbase() {
 }
 
 
+
 ## Portability Functions
+
+siph_ldconfig () {
+    if [ -n `which ldconfig` ]; then
+        ldconfig
+    fi
+}
 
 siph_git() {
     c="$1"; shift
