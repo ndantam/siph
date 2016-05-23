@@ -248,14 +248,18 @@ siph_cmd_deps () {
 
 siph_bld_deps() {
     siph_msg "DEPS"
-    cd "$SIPH_BLD_BUILDDIR"
-    siph_pkg_deps || siph_err "Package dependencies failed"
+    mkdir -p "$SIPH_BLD_BUILDDIR"
+    cd "$SIPH_BLD_BUILDDIR" && \
+        siph_pkg_deps || \
+            siph_err "Package dependencies failed"
 }
 
 siph_bld_fetch() {
     siph_msg "FETCH"
-    cd "$SIPH_BLD_BUILDDIR"
-    siph_pkg_fetch || siph_err "Package fetch failed"
+    mkdir -p "$SIPH_BLD_BUILDDIR"
+    cd "$SIPH_BLD_BUILDDIR" && \
+        siph_pkg_fetch \
+            || siph_err "Package fetch failed"
 }
 
 siph_bld_configure() {
