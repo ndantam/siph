@@ -411,6 +411,7 @@ siph_bld_source() {
         # Remote Repo
         siph_msg "Syncing repo '$SIPH_SPEC'"
         repo_base=`echo "$SIPH_SPEC" | sed -e 's!.*/\([^/.]*\)\(.git\)\?!\1!'`
+        siph_su mkdir -p "$SIPH_REPODIR"
         if [ yes = "$SIPH_OPT_FETCH" ]; then
             if test -e "$SIPH_REPODIR/$repo_base"; then
                 cd "$SIPH_REPODIR/$repo_base" && \
@@ -693,7 +694,7 @@ siph_install_quicklisp () {
         else
             ql_proxy=""
         fi
-        sbcl --script <<EOF
+        siph_su sbcl --script <<EOF
 (load "$file")
 (quicklisp-quickstart:install :path "$SIPH_PREFIX/quicklisp" $ql_proxy)
 EOF
