@@ -16,29 +16,29 @@ SETUP
 Installing Packages Locally
 ---------------------------
 
-1. Create a siph directory:
+1. Create a user siph directory:
 
     `mkdir ~/.siph`
 
-2. Get the siph repo install script and config file:
+2. Get the siph and siph-pkg repositories.:
 
     - `cd ~/.siph && git clone https://github.com/ndantam/siph.git`
+    - `cd ~/.siph && git clone https://github.com/ndantam/siph-pkg.git`
+
+3. Install the user config file and siph script:
+
     - `cp ~/.siph/siph/config.example ~/.siph/config`
     - `sudo cp ~/.siph/siph/siph /usr/local/bin`
 
-3. Get the siph package repo:
-
-    `cd ~/.siph && git clone https://github.com/ndantam/siph-pkg.git`
-
 4. Install something:
 
-    `sudo siph install ompl`
+    `siph -s install ompl`
 
 
 Testing Packaging in Different Roots
 ------------------------------------
 
-(skip this part if you only want to install packages locally)
+(Skip this part if you only want to install packages locally.)
 
 Siph can manage multiple OS distributions to test packages on
 different platforms.  Distributions roots are stored via BTRFS,
