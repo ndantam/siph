@@ -42,7 +42,9 @@ fi
 ## HELPERS ##
 
 siph_err()  {
-    echo "SIPH ERROR: $1"
+    echo "SIPH ERROR: $1" 1>&2
+    echo "pwd: `pwd`"  1>&2
+    echo "user: `id -un`" 1>&2
     exit 1
 }
 
@@ -249,18 +251,12 @@ siph_cmd_deps () {
 
 siph_bld_deps() {
     siph_msg "DEPS"
-    siph_su mkdir -p "$SIPH_BLD_BUILDDIR"
-    cd "$SIPH_BLD_BUILDDIR" && \
-        siph_pkg_deps || \
-            siph_err "Package dependencies failed"
+    siph_pkg_deps || siph_err "Package dependencies failed"
 }
 
 siph_bld_fetch() {
     siph_msg "FETCH"
-    siph_su mkdir -p "$SIPH_BLD_BUILDDIR"
-    cd "$SIPH_BLD_BUILDDIR" && \
-        siph_pkg_fetch \
-            || siph_err "Package fetch failed"
+    siph_pkg_fetch || siph_err "Package fetch failed"
 }
 
 siph_bld_configure() {
@@ -328,6 +324,7 @@ siph_bld_merge() {
     siph_msg "Installing new files"
     siph_su touch "$SIPH_BLD_DBDIR/newfiles"
     siph_su touch "$SIPH_BLD_DBDIR/newdirs"
+    siph_su touch "$SIPH_BLD_DBDIR/newversion"
     cd "$SIPH_BLD_DESTDIR" || siph_err "No destdir"
     find . | sed -e 's!^./!!' | ( \
             while read -r file; do \
@@ -352,16 +349,16 @@ siph_bld_merge() {
     #         siph_xargs rmdir -v
     # fi
 
-    siph_su mv "$SIPH_BLD_DBDIR/newfiles" "$SIPH_BLD_DBDIR/files"
-    siph_su mv "$SIPH_BLD_DBDIR/newdirs" "$SIPH_BLD_DBDIR/dirs"
 
     ## ldconfig
     siph_ldconfig
 
-
     ## Record installation
-    cp "$SIPH_FILE" "$SIPH_BLD_DBDIR/siph"
-    siph_src_rev | siph_su sh -c "cat > $SIPH_BLD_DBDIR/version"
+    siph_su cp "$SIPH_FILE" "$SIPH_BLD_DBDIR/siph"
+    siph_src_rev >> "$SIPH_BLD_DBDIR/newversion"
+    siph_su mv "$SIPH_BLD_DBDIR/newversion" "$SIPH_BLD_DBDIR/version"
+    siph_su mv "$SIPH_BLD_DBDIR/newfiles" "$SIPH_BLD_DBDIR/files"
+    siph_su mv "$SIPH_BLD_DBDIR/newdirs" "$SIPH_BLD_DBDIR/dirs"
 
     rm -r "$SIPH_BLD_WORKDIR"
 }
@@ -377,11 +374,7 @@ siph_su_fetch() {
     siph_su "$0" pkg "$SIPH_SPEC" fetch
 }
 
-siph_su_deps() {
-    siph_su "$0" pkg "$SIPH_SPEC" deps
-}
-
-siph_su_deps() {
+siph_su_configure() {
     siph_su "$0" pkg "$SIPH_SPEC" configure
 }
 
@@ -412,20 +405,19 @@ siph_bld_source() {
     if test -f "$SIPH_SPEC/.siph"; then
         # Explicit repo
         SIPH_FILE="$SIPH_SPEC/.siph"
-        SIPH_BLD_SRCDIR="$SIPH_SPEC"
-        SIPH_BLD_BUILDDIR="$SIPH_SPEC"
+        SIPH_BLD_SRCDIR=`realpath "$SIPH_SPEC"`
+        SIPH_BLD_BUILDDIR=`realpath "$SIPH_SPEC"`
     elif (echo "$SIPH_SPEC" |  grep 'https\?:\/\/.*' > /dev/null); then
         # Remote Repo
         siph_msg "Syncing repo '$SIPH_SPEC'"
         repo_base=`echo "$SIPH_SPEC" | sed -e 's!.*/\([^/.]*\)\(.git\)\?!\1!'`
         if [ yes = "$SIPH_OPT_FETCH" ]; then
             if test -e "$SIPH_REPODIR/$repo_base"; then
-                cd "$SIPH_REPODIR/$repo_base"
-                siph_git pull || siph_err "Could not pull"
+                cd "$SIPH_REPODIR/$repo_base" && \
+                    siph_su_git pull || siph_err "Could not pull"
             else
-                siph_su mkdir -p "$SIPH_REPODIR"
-                cd "$SIPH_REPODIR"
-                siph_git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
+                cd "$SIPH_REPODIR" && \
+                    siph_su_git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
             fi
         fi
         SIPH_BLD_SRCDIR="$SIPH_REPODIR/$repo_base"
@@ -455,18 +447,6 @@ siph_bld_source() {
     siph_msg "FILE: '$SIPH_FILE'"
     . "$SIPH_FILE" || siph_err "Could not source '$SIPH_FILE'"
 
-    if [ -z "$SIPH_BLD_SRCDIR" ]; then
-       SIPH_BLD_SRCDIR="$SIPH_REPODIR/$SIPH_PKG_NAME"
-    fi
-    if [ -z "$SIPH_BLD_BUILDDIR" ]; then
-       SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$SIPH_PKG_NAME"
-    fi
-    # Canonicalize paths
-    siph_su mkdir -vp "$SIPH_BLD_SRCDIR"
-    siph_su mkdir -vp "$SIPH_BLD_BUILDDIR"
-    SIPH_BLD_SRCDIR=`realpath "$SIPH_BLD_SRCDIR"`
-    SIPH_BLD_BUILDDIR=`realpath "$SIPH_BLD_BUILDDIR"`
-
     test -n "$SIPH_PKG_NAME" || siph_err "No package name"
     test -n "$SIPH_PKG_REPO" || siph_err "No package repo"
     test -n "$SIPH_PKG_BRANCH" || siph_err "No package branch"
@@ -484,7 +464,7 @@ siph_bld_source() {
 
 siph_testpkg() {
     siph_bld_source $@
-    siph_su_deps
+    siph_bld_deps
     siph_su_fetch
     siph_su_configure
     siph_su_compile
@@ -569,7 +549,7 @@ siph_install()
     fi
 
     # build and install
-    siph_su_deps
+    siph_bld_deps
     siph_su_configure
     siph_su_compile
     siph_su_test
@@ -630,18 +610,27 @@ siph_ldconfig () {
 
 siph_su() {
     if [ -z "$SIPH_OPT_USER" ] ; then
-        $@
+        $@ || siph_err "subcommand '$*' failed"
     else
-        su "$SIPH_OPT_USER" -c "$*"
+        su "$SIPH_OPT_USER" -c "$*" || siph_err "su subcommand '$*'"
     fi
 }
 
 siph_git() {
     c="$1"; shift
     if [ yes = "$SIPH_OPT_QUIET" ] ; then
-        siph_su git "$c" -q $@
+        git "$c" -q $@ || siph_err "Git failed"
     else
-        siph_su git "$c" $@
+        git "$c" $@ || siph_err "Git failed"
+    fi
+}
+
+siph_su_git() {
+    c="$1"; shift
+    if [ yes = "$SIPH_OPT_QUIET" ] ; then
+        siph_su git "$c" -q $@ || siph_err "Git failed"
+    else
+        siph_su git "$c" $@ || siph_err "Git failed"
     fi
 }
 
@@ -788,18 +777,17 @@ siph_pkg_clean()
 
 ## Build Helpers
 siph_fetch_git () {
-    mkdir -p "$SIPH_REPODIR"
     repo="$SIPH_REPODIR/$SIPH_PKG_NAME"
     if [ -d "$repo" ]; then
         # TODO: check if repo URL has changed
         siph_msg "Updating '$repo'"
-        cd "$repo"
-        siph_git fetch && siph_git checkout "$SIPH_PKG_BRANCH"
+        cd "$repo" && \
+            siph_su_git fetch || siph_err "Could not update repo"
     else
         siph_msg "Cloning '$SIPH_PKG_REPO'"
-        siph_git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
-        cd "$repo" && siph_git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
+        siph_su_git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
     fi
+    cd "$repo" && siph_su_git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
 
     SIPH_BLD_SRCDIR="$repo"
     SIPH_BLD_BUILDDIR="$repo"
