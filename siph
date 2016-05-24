@@ -74,9 +74,28 @@ siph_xargs() {
 }
 
 siph_dist_env() {
+    # Passing result to sh
     e="CCACHE_DIR='$SIPH_DEFAULT_CCACHE_DIR'"
-    e="http_proxy='$http_proxy' $e"
-    e="https_proxy='$https_proxy' $e"
+    if [ -n "$http_proxy" ]; then
+        e="http_proxy='$http_proxy' $e"
+    fi
+    if [ -n "$https_proxy" ]; then
+        e="https_proxy='$https_proxy' $e"
+    fi
+    echo "$e"
+}
+
+siph_user_env() {
+    # Passing result to sudo
+    if [ -n "$CCACHE_DIR" ]; then
+        e="CCACHE_DIR=$CCACHE_DIR"
+    fi
+    if [ -n "$http_proxy" ]; then
+        e="http_proxy=$http_proxy $e"
+    fi
+    if [ -n "$https_proxy" ]; then
+        e="https_proxy=$https_proxy $e"
+    fi
     echo "$e"
 }
 
@@ -938,7 +957,8 @@ while true; do
             ;;
         -s)
             shift
-            exec sudo  "$0" -u `id -un` $@
+            e=`siph_user_env`
+            exec sudo $e "$0" -u `id -un` "$*"
             ;;
         *)
             siph_dispatch $@
