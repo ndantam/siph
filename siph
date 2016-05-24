@@ -538,7 +538,6 @@ siph_uninstall() {
 siph_install()
 {
     siph_bld_source "$1"
-    siph_su_fetch
     new_version=`siph_src_rev`
 
     if [ -d "$SIPH_BLD_DBDIR" -a -f "$SIPH_BLD_DBDIR/version" ]; then
@@ -551,6 +550,7 @@ siph_install()
 
     # build and install
     siph_bld_deps
+    siph_su_fetch
     siph_su_configure
     siph_su_compile
     siph_su_test
