@@ -220,6 +220,9 @@ siph_mkdist()
 }
 
 siph_cpdist() {
+    if [ -e "$SIPH_ROOT/dists/$2" ]; then
+        siph_err "Distribution '$2' already exists"
+    fi
     btrfs subvolume snapshot "$SIPH_ROOT/dists/$1" "$SIPH_ROOT/dists/$2" || \
         siph_err "Could not copy dist"
 }
