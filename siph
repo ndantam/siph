@@ -199,9 +199,14 @@ siph_tmpclean()
 
 siph_update()
 {
-    for SIPH_DIST_ROOT in $SIPH_ROOT/dists/*; do
+    if [ -n "$1" ] ; then
+        siph_dist_root "$1"
         siph_distcommand "apt-get update && apt-get -y dist-upgrade"
-    done
+    else
+        for SIPH_DIST_ROOT in $SIPH_ROOT/dists/*; do
+            siph_distcommand "apt-get update && apt-get -y dist-upgrade"
+        done
+    fi
 }
 
 
@@ -994,8 +999,8 @@ siph_dispatch () {
             echo "        List distributions"
             echo "    siph [-s] sh DISTRIBUTION"
             echo "        Start interative shell in DISTRIBUTION"
-            echo "    siph [-s] update DISTRIBUTION"
-            echo "        Update a root directory tree"
+            echo "    siph [-s] update [DISTRIBUTION"]
+            echo "        Update packages in root directory tree"
             echo "    siph [-s] distpkgs DISTRIBUTION packages..."
             echo "        Install distribution packages in a root directory tree"
             echo "    siph [-s] tmp DISTRIBUTION"
