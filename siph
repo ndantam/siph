@@ -537,9 +537,15 @@ siph_test() {
 siph_uninstall() {
     siph_msg "UNINSTALL"
 
+    # Extract the package name
     SIPH_PKG_NAME="$1"
     SIPH_BLD_DBDIR="$SIPH_DBDIR/$SIPH_PKG_NAME"
 
+    if [ '!' -d "$SIPH_BLD_DBDIR" ]; then
+        siph_bld_source "$1"
+    fi
+
+    # Source intalled spec
     if test -d "$SIPH_BLD_DBDIR"; then
         . "$SIPH_BLD_DBDIR/siph"
     else
