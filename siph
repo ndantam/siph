@@ -21,13 +21,13 @@ SIPH_DBDIR="$SIPH_DEFAULT_DBDIR"
 SIPH_PKGDIR="$SIPH_DEFAULT_PKGDIR"
 SIPH_CCACHE_DIR="$SIPH_DEFAULT_CCACHE_DIR"
 
-SIPH_OPT_FETCH=yes
-SIPH_OPT_REINSTALL=no
-SIPH_OPT_MAKE_BIN=no
-SIPH_OPT_USE_BIN=yes
-SIPH_OPT_RECURSIVE=no
-SIPH_OPT_QUIET=no
-SIPH_OPT_USER=""
+test -n "$SIPH_OPT_FETCH"         || SIPH_OPT_FETCH=yes
+test -n "$SIPH_OPT_REINSTALL"     || SIPH_OPT_REINSTALL=no
+test -n "$SIPH_OPT_MAKE_BIN"      || SIPH_OPT_MAKE_BIN=no
+test -n "$SIPH_OPT_USE_BIN"       || SIPH_OPT_USE_BIN=yes
+test -n "$SIPH_OPT_RECURSIVE"     || SIPH_OPT_RECURSIVE=no
+test -n "$SIPH_OPT_QUIET"         || SIPH_OPT_QUIET=no
+test -n "$SIPH_OPT_USER"          || SIPH_OPT_USER=""
 
 SIPH_PREFIX=/usr/local
 
@@ -63,7 +63,6 @@ siph_debug() {
 siph_dist_root() {
     SIPH_DIST_NAME="$1"; shift
     SIPH_DIST_ROOT="$SIPH_ROOT/dists/${SIPH_DIST_NAME}"
-    SIPH_TMP_ROOT="$SIPH_ROOT/tmp/${SIPH_DIST_NAME}"
 }
 
 siph_xargs() {
@@ -106,7 +105,7 @@ siph_distcommand() {
 }
 
 siph_tmpcommand() {
-    siph_msg "Chrooting into $SIPH_DIST_NAME"
+    siph_msg "Chrooting into $SIPH_TMP_ROOT"
     e=`siph_dist_env`
     chroot "$SIPH_TMP_ROOT" /bin/sh -c "$e $1"
 }
@@ -153,23 +152,25 @@ siph_src_rev () {
 siph_tmpclone()
 {
     siph_dist_root $@
-    if [ -d "$SIPH_TMP_ROOT" ] ; then
-        siph_err "ERROR: tmp directory '$SIPH_TMP_ROOT' already exists"
-    fi
     mkdir -p "$SIPH_ROOT/tmp"
     mkdir -p "$SIPH_ROOT/ccache"
+    SIPH_TMP_ROOT="`mktemp -p "$SIPH_ROOT/tmp/" -d`/$SIPH_DIST_NAME"
     btrfs subvolume snapshot "$SIPH_DIST_ROOT" "$SIPH_TMP_ROOT" || siph_err "Could not clone '$SIPH_DIST_ROOT'"
 
     siph_dist_setup "$SIPH_TMP_ROOT"
 }
 
+siph_rmtmp()
+{
+    siph_dist_teardown "$1"
+    btrfs subvolume delete "$1"
+    rmdir `dirname "$1"`
+}
+
 siph_tmpclean()
 {
-    for SIPH_TMP_ROOT in $SIPH_ROOT/tmp/*; do
-        if [ -d "$SIPH_TMP_ROOT" ] ; then
-            siph_dist_teardown "$SIPH_TMP_ROOT"
-            btrfs subvolume delete "$SIPH_TMP_ROOT"
-        fi
+    for t in $SIPH_ROOT/tmp/*; do
+        siph_rmtmp $t/*
     done
 }
 
@@ -512,13 +513,13 @@ siph_testroot() {
     # TODO: this looks gross
     if [ -f "$SIPH_BLD_SRCDIR/.siph" ]; then
         # native siph package
-        siph_tmpcommand "/siph test ${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+        siph_tmpcommand "/siph -F test ${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
     else
         # using specific siph file
-        siph_tmpcommand "/siph test $@"
+        siph_tmpcommand "/siph -F test $@"
     fi
 
-    siph_tmpclean
+    siph_rmtmp "$SIPH_TMP_ROOT"
 }
 
 siph_test() {
@@ -629,10 +630,11 @@ siph_ldconfig () {
 }
 
 siph_su() {
+    e="SIPH_OPT_FETCH=$SIPH_OPT_FETCH"
     if [ -z "$SIPH_OPT_USER" ] ; then
-        $@ || siph_err "subcommand '$*' failed"
+        sh -c "$e $*" || siph_err "subcommand '$*' failed"
     else
-        su "$SIPH_OPT_USER" -c "$*" || siph_err "su subcommand '$*'"
+        su "$SIPH_OPT_USER" -c "$e $*" || siph_err "su subcommand '$*'"
     fi
 }
 
@@ -798,11 +800,13 @@ siph_pkg_clean()
 ## Build Helpers
 siph_fetch_git () {
     repo="$SIPH_REPODIR/$SIPH_PKG_NAME"
-    if [ -d "$repo" ]; then
+    if [ -d "$repo"  ]; then
         # TODO: check if repo URL has changed
-        siph_msg "Updating '$repo'"
-        cd "$repo" && \
-            siph_su_git fetch || siph_err "Could not update repo"
+        if [ "x$SIPH_OPT_FETCH" = xyes ]; then
+            siph_msg "Updating '$repo'"
+            cd "$repo" && \
+                siph_su_git fetch || siph_err "Could not update repo"
+        fi
     else
         siph_msg "Cloning '$SIPH_PKG_REPO'"
         siph_su_git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
@@ -870,6 +874,9 @@ siph_dispatch () {
         tmp)
             siph_tmpclone $@
             ;;
+        rmtmp)
+            siph_rmtmp $@
+            ;;
         clean)
             siph_tmpclean $@
             ;;
@@ -917,6 +924,8 @@ siph_dispatch () {
             echo "        Install packages in a root directory tree"
             echo "    siph tmp DISTRIBUTION"
             echo "        Create a temporary clone of a root tree"
+            echo "    siph rmtmp PATH"
+            echo "        Remove temporary clone"
             echo "    siph clean"
             echo "        Remove all temporary root clones"
             echo ""
@@ -938,6 +947,7 @@ siph_dispatch () {
     esac
 }
 
+# echo "ARGS ($#): $@"
 
 while true; do
     case "$1" in
