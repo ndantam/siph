@@ -706,14 +706,19 @@ siph_find_quicklisp ()
 siph_curl ()
 {
     # subshell
-    ( siph_proxy_setup && curl $@ ) || \
+    ( siph_proxy_setup && siph_su curl $@ ) || \
         siph_err "Could not run curl"
 }
 
 siph_install_quicklisp () {
     siph_find_quicklisp
     if test '!' -e "$SIPH_QUICKLISP"; then
-        file=`tempfile`
+        file=`siph_su tempfile`
+        if [ 0 = `id -un` -a -z "$SIPH_OPT_USER" ]; then
+            p="$SIPH_PREFIX/quicklisp"
+        else
+            p="$HOME/.quicklisp"
+        fi
         siph_curl -o "$file" "https://beta.quicklisp.org/quicklisp.lisp" || siph_err "Could not fetch quicklisp"
         if [ -n "$http_proxy" ]; then
             ql_proxy=":proxy \"$http_proxy\""
@@ -722,11 +727,12 @@ siph_install_quicklisp () {
         fi
         siph_su sbcl --script <<EOF
 (load "$file")
-(quicklisp-quickstart:install :path "$SIPH_PREFIX/quicklisp" $ql_proxy)
+(quicklisp-quickstart:install :path "$p" $ql_proxy)
 EOF
         rm "$file"
     fi
     siph_find_quicklisp
+    test -n "$SIPH_QUICKLISP" || siph_err "Failed to install quicklisp"
 }
 
 ## Package Helpers
