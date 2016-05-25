@@ -30,10 +30,13 @@ Installing Packages Locally
     - `cp ~/.siph/siph/config.example ~/.siph/config`
     - `sudo cp ~/.siph/siph/siph /usr/local/bin`
 
-4. Install something:
+4. Show available commands
+
+    `siph help`
+
+5. Install something:
 
     `siph -s install ompl`
-
 
 Testing Packaging in Different Roots
 ------------------------------------

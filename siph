@@ -143,6 +143,30 @@ siph_dist_teardown() {
     fi
 }
 
+siph_dist_prep_pkg() {
+    r="$1"; shift
+
+    # get sources in original root
+    siph_bld_source $@
+    here=`pwd`
+    siph_bld_fetch
+    cd "$here"
+
+    # clone sources to tmp
+    siph_msg "Cloning sources into '$r'..."
+    mkdir -p "${r}/${SIPH_DEFAULT_REPODIR}"
+
+    if [ -e "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}" ]
+    then
+        echo 1
+        cd "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}" && \
+            siph_git fetch || siph_err "Could not pull"
+    else
+        echo 2
+        siph_git clone "$SIPH_BLD_SRCDIR" "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+    fi
+}
+
 siph_src_rev () {
     git -C "$SIPH_BLD_SRCDIR" rev-parse HEAD
 }
@@ -183,7 +207,7 @@ siph_update()
 }
 
 
-siph_distinstall()
+siph_distpkgs()
 {
     siph_dist_root $@; shift;
     siph_distcommand "apt-get install $*"
@@ -500,16 +524,7 @@ siph_testroot() {
     siph_tmpclone $@ || siph_err "Could not clone distro"
     shift
 
-    # get sources in original root
-    siph_bld_source $@
-    here=`pwd`
-    siph_bld_fetch
-    cd "$here"
-
-    # clone sources to tmp
-    siph_msg "srcdir: $SIPH_BLD_SRCDIR"
-    mkdir -p "${SIPH_TMP_ROOT}/${SIPH_DEFAULT_REPODIR}"
-    siph_git clone "$SIPH_BLD_SRCDIR" "${SIPH_TMP_ROOT}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+    siph_dist_prep_pkg "$SIPH_TMP_ROOT" $@
 
     # Chroot and test
     siph_msg "Chrooting into temporary $SIPH_DIST_NAME"
@@ -587,6 +602,47 @@ siph_install()
     siph_bld_merge
 
 
+}
+
+siph_installdist()
+{
+    siph_dist_root $@; shift
+
+
+    siph_dist_setup "$SIPH_DIST_ROOT"
+    siph_dist_prep_pkg "$SIPH_DIST_ROOT" $@
+
+    # Chroot and test
+    siph_msg "Chrooting into $SIPH_DIST_NAME"
+
+    if [ -f "$SIPH_BLD_SRCDIR/.siph" ]; then
+        # native siph package
+        siph_distcommand "/siph -F install ${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+    else
+        # using specific siph file
+        siph_distcommand "/siph -F install $@"
+    fi
+
+    siph_dist_teardown "$SIPH_DIST_ROOT"
+
+}
+
+siph_uninstalldist()
+{
+    siph_dist_root $@; shift
+
+    siph_dist_setup "$SIPH_DIST_ROOT"
+    siph_dist_prep_pkg "$SIPH_DIST_ROOT" $@
+
+    if [ -f "$SIPH_BLD_SRCDIR/.siph" ]; then
+        # native siph package
+        siph_distcommand "/siph -F uninstall ${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
+    else
+        # using specific siph file
+        siph_distcommand "/siph -F uninstall $@"
+    fi
+
+    siph_dist_teardown "$SIPH_DIST_ROOT"
 }
 
 siph_installbase() {
@@ -882,8 +938,8 @@ siph_dispatch () {
         update)
             siph_update $@
             ;;
-        distinstall)
-            siph_distinstall $@
+        distpkgs)
+            siph_distpkgs $@
             ;;
         tmp)
             siph_tmpclone $@
@@ -903,6 +959,12 @@ siph_dispatch () {
         install)
             siph_install $@
             ;;
+        installdist)
+            siph_installdist $@
+            ;;
+        uninstalldist)
+            siph_uninstalldist $@
+            ;;
         installbase)
             siph_installbase $@
             ;;
@@ -916,43 +978,54 @@ siph_dispatch () {
             true
             ;;
         help)
-            echo "Usage: siph COMMAND"
+            echo "Usage: siph [OPTION] COMMAND"
+            echo ""
+            echo "  Options:"
+            echo "  ======================="
+            echo ""
+            echo "    -s,        Run as root (using sudo)"
             echo ""
             echo "  DISTRIBUTION MANAGEMENT:"
             echo "  ======================="
-            echo "    siph mkdist OS RELEASE [DISTRIBUTION]"
+            echo "    siph [-s] mkdist OS RELEASE [DISTRIBUTION]"
             echo "        Create a root directory tree"
-            echo "    siph rmdist DISTRIBUTION"
+            echo "    siph [-s] rmdist DISTRIBUTION"
             echo "        Delete a root directory tree"
-            echo "    siph cpdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
+            echo "    siph [-s] cpdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
             echo "        Copy a distribution"
-            echo "    siph mvdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
+            echo "    siph [-s] mvdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
             echo "        Rename a distribution"
-            echo "    siph lsdist"
+            echo "    siph [-s] lsdist"
             echo "        List distributions"
-            echo "    siph sh DISTRIBUTION"
+            echo "    siph [-s] sh DISTRIBUTION"
             echo "        Start interative shell in DISTRIBUTION"
-            echo "    siph update DISTRIBUTION"
+            echo "    siph [-s] update DISTRIBUTION"
             echo "        Update a root directory tree"
-            echo "    siph distinstall DISTRIBUTION packages..."
-            echo "        Install packages in a root directory tree"
-            echo "    siph tmp DISTRIBUTION"
+            echo "    siph [-s] distpkgs DISTRIBUTION packages..."
+            echo "        Install distribution packages in a root directory tree"
+            echo "    siph [-s] tmp DISTRIBUTION"
             echo "        Create a temporary clone of a root tree"
-            echo "    siph rmtmp PATH"
+            echo "    siph [-s] rmtmp PATH"
             echo "        Remove temporary clone"
-            echo "    siph clean"
+            echo "    siph [-s] clean"
             echo "        Remove all temporary root clones"
             echo ""
             echo "  PACKAGE TESTING:"
             echo "  ================"
-            echo "    siph test [DISTRIBUTION] PACKAGE"
+            echo "    siph [-s] test [DISTRIBUTION] PACKAGE"
             echo "        Build and test PACKAGE, optionally in DISTRIBUTION"
             echo ""
             echo "  PACKAGE MANAGEMENT:"
             echo "  ==================="
-            echo "    siph install PACKAGE"
+            echo "    siph [-s] install PACKAGE"
             echo "        Install PACKAGE"
-            echo "    siph installbase"
+            echo "    siph [-s] uninstall PACKAGE"
+            echo "        Uninstall PACKAGE"
+            echo "    siph -s installdist DISTRIBUTION PACKAGE"
+            echo "        Install PACKAGE in DISTRIBUTION"
+            echo "    siph -s uninstalldist DISTRIBUTION PACKAGE"
+            echo "        Uninstall PACKAGE in DISTRIBUTION"
+            echo "    siph [-s] installbase"
             echo "        Install base siph packages"
             ;;
         *)
