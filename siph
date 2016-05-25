@@ -158,11 +158,9 @@ siph_dist_prep_pkg() {
 
     if [ -e "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}" ]
     then
-        echo 1
         cd "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}" && \
             siph_git fetch || siph_err "Could not pull"
     else
-        echo 2
         siph_git clone "$SIPH_BLD_SRCDIR" "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
     fi
 }
@@ -851,10 +849,7 @@ siph_pkg_test() {
 
 siph_pkg_install()
 {
-    echo bif
-    pwd
     if [ -f Makefile ] ; then
-        echo foo
         make install DESTDIR="$SIPH_BLD_DESTDIR"
     fi
 }
