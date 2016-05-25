@@ -178,7 +178,7 @@ siph_tmpclean()
 siph_update()
 {
     for SIPH_DIST_ROOT in $SIPH_ROOT/dists/*; do
-        siph_distcommand "apt-get update && apt-get -yudist-upgrade"
+        siph_distcommand "apt-get update && apt-get -y dist-upgrade"
     done
 }
 
@@ -683,7 +683,6 @@ siph_apt_get () {
 }
 
 siph_apt_install () {
-    siph_apt_get update
     siph_apt_get -y install $@
 }
 
