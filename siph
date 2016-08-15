@@ -977,56 +977,57 @@ siph_dispatch () {
         nop)
             true
             ;;
-        help)
-            echo "Usage: siph [OPTION] COMMAND"
-            echo ""
-            echo "  Options:"
-            echo "  ======================="
-            echo ""
-            echo "    -s,        Run as root (using sudo)"
-            echo ""
-            echo "  DISTRIBUTION MANAGEMENT:"
-            echo "  ======================="
-            echo "    siph [-s] mkdist OS RELEASE [DISTRIBUTION]"
-            echo "        Create a root directory tree"
-            echo "    siph [-s] rmdist DISTRIBUTION"
-            echo "        Delete a root directory tree"
-            echo "    siph [-s] cpdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
-            echo "        Copy a distribution"
-            echo "    siph [-s] mvdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION"
-            echo "        Rename a distribution"
-            echo "    siph [-s] lsdist"
-            echo "        List distributions"
-            echo "    siph [-s] sh DISTRIBUTION"
-            echo "        Start interative shell in DISTRIBUTION"
-            echo "    siph [-s] update [DISTRIBUTION"]
-            echo "        Update packages in root directory tree"
-            echo "    siph [-s] distpkgs DISTRIBUTION packages..."
-            echo "        Install distribution packages in a root directory tree"
-            echo "    siph [-s] tmp DISTRIBUTION"
-            echo "        Create a temporary clone of a root tree"
-            echo "    siph [-s] rmtmp PATH"
-            echo "        Remove temporary clone"
-            echo "    siph [-s] clean"
-            echo "        Remove all temporary root clones"
-            echo ""
-            echo "  PACKAGE TESTING:"
-            echo "  ================"
-            echo "    siph [-s] test [DISTRIBUTION] PACKAGE"
-            echo "        Build and test PACKAGE, optionally in DISTRIBUTION"
-            echo ""
-            echo "  PACKAGE MANAGEMENT:"
-            echo "  ==================="
-            echo "    siph [-s] install PACKAGE"
-            echo "        Install PACKAGE"
-            echo "    siph [-s] uninstall PACKAGE"
-            echo "        Uninstall PACKAGE"
-            echo "    siph -s installdist DISTRIBUTION PACKAGE"
-            echo "        Install PACKAGE in DISTRIBUTION"
-            echo "    siph -s uninstalldist DISTRIBUTION PACKAGE"
-            echo "        Uninstall PACKAGE in DISTRIBUTION"
-            echo "    siph [-s] installbase"
-            echo "        Install base siph packages"
+        help|--help|-?)
+        cat <<EOF
+Usage: siph [OPTION] COMMAND
+
+  Options:
+  =======================
+    -s,        Run as root (using sudo)
+
+  DISTRIBUTION MANAGEMENT:
+  =======================
+    siph [-s] mkdist OS RELEASE [DISTRIBUTION]
+        Create a root directory tree
+    siph [-s] rmdist DISTRIBUTION
+        Delete a root directory tree
+    siph [-s] cpdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION
+        Copy a distribution
+    siph [-s] mvdist SOURCE_DISTRIBUTION DEST_DISTRIBUTION
+        Rename a distribution
+    siph [-s] lsdist
+        List distributions
+    siph [-s] sh DISTRIBUTION
+        Start interative shell in DISTRIBUTION
+    siph [-s] update [DISTRIBUTION]
+        Update packages in root directory tree
+    siph [-s] distpkgs DISTRIBUTION packages...
+        Install distribution packages in a root directory tree
+    siph [-s] tmp DISTRIBUTION
+        Create a temporary clone of a root tree
+    siph [-s] rmtmp PATH
+        Remove temporary clone
+    siph [-s] clean
+        Remove all temporary root clones
+
+  PACKAGE TESTING:
+  ================
+    siph [-s] test [DISTRIBUTION] PACKAGE
+        Build and test PACKAGE, optionally in DISTRIBUTION
+
+  PACKAGE MANAGEMENT:
+  ===================
+    siph [-s] install PACKAGE
+        Install PACKAGE
+    siph [-s] uninstall PACKAGE
+        Uninstall PACKAGE
+    siph -s installdist DISTRIBUTION PACKAGE
+        Install PACKAGE in DISTRIBUTION
+    siph -s uninstalldist DISTRIBUTION PACKAGE
+        Uninstall PACKAGE in DISTRIBUTION
+    siph [-s] installbase
+        Install base siph packages
+EOF
             ;;
         *)
             siph_err "Invalid Command '$SIPH_CMD'"
