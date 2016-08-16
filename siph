@@ -156,13 +156,7 @@ siph_dist_prep_pkg() {
     siph_msg "Cloning sources into '$r'..."
     mkdir -p "${r}/${SIPH_DEFAULT_REPODIR}"
 
-    if [ -e "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}" ]
-    then
-        cd "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}" && \
-            siph_git fetch || siph_err "Could not pull"
-    else
-        siph_git clone "$SIPH_BLD_SRCDIR" "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}"
-    fi
+    siph_do_fetch "$SIPH_BLD_SRCDIR" "$SIPH_PKG_BRANCH" "${r}/${SIPH_DEFAULT_REPODIR}/${SIPH_PKG_NAME}" "siph_git"
 }
 
 siph_src_rev () {
@@ -462,17 +456,8 @@ siph_bld_source() {
         siph_msg "Syncing repo '$SIPH_SPEC'"
         repo_base=`echo "$SIPH_SPEC" | sed -e 's!.*/\([^/.]*\)\(.git\)\?!\1!'`
         siph_su mkdir -p "$SIPH_REPODIR"
-        if [ yes = "$SIPH_OPT_FETCH" ]; then
-            if test -e "$SIPH_REPODIR/$repo_base"; then
-                cd "$SIPH_REPODIR/$repo_base" && \
-                    siph_su_git pull || siph_err "Could not pull"
-            else
-                cd "$SIPH_REPODIR" && \
-                    siph_su_git clone "$SIPH_SPEC" || siph_err "Could not clone repo"
-            fi
-        fi
-        SIPH_BLD_SRCDIR="$SIPH_REPODIR/$repo_base"
-        SIPH_BLD_BUILDDIR="$SIPH_REPODIR/$repo_base"
+        siph_do_fetch "$SIPH_SPEC" "origin/master" "$SIPH_REPODIR/$repo_base" \
+                      || siph_err "Could not fetch '$SIPH_SPEC'"
         SIPH_FILE="$SIPH_BLD_SRCDIR/.siph"
     else
         # Package name
@@ -707,6 +692,7 @@ siph_su() {
 }
 
 siph_git() {
+    echo $@
     c="$1"; shift
     if [ yes = "$SIPH_OPT_QUIET" ] ; then
         git "$c" -q $@ || siph_err "Git failed"
@@ -834,6 +820,8 @@ siph_pkg_configure()
         autoreconf -i && "$SIPH_BLD_SRCDIR/configure" --prefix="$SIPH_BLD_PREFIX"
     elif test -f "$SIPH_BLD_SRCDIR/CMakeLists.txt"; then
         cmake "$SIPH_BLD_SRCDIR" -DCMAKE_INSTALL_PREFIX="$SIPH_BLD_PREFIX"
+    elif test -f "$SIPH_BLD_SRCDIR/configure"; then
+        ./configure
     fi
 }
 
@@ -868,23 +856,47 @@ siph_pkg_clean()
 
 
 ## Build Helpers
-siph_fetch_git () {
-    repo="$SIPH_REPODIR/$SIPH_PKG_NAME"
+siph_do_fetch() {
+    url="$1"
+    branch="$2"
+    repo="$3"
+
+    if [ -z "$4"]; then
+        git_cmd="siph_su_git"
+    else
+        git_cmd="$4"
+    fi
+
+    echo "Fetching '$1' '$2' '$3'"
+
     if [ -d "$repo"  ]; then
         # TODO: check if repo URL has changed
         if [ "x$SIPH_OPT_FETCH" = xyes ]; then
             siph_msg "Updating '$repo'"
             cd "$repo" && \
-                siph_su_git fetch || siph_err "Could not update repo"
+                $git_cmd fetch || siph_err "Could not update repo"
         fi
     else
-        siph_msg "Cloning '$SIPH_PKG_REPO'"
-        siph_su_git clone "$SIPH_PKG_REPO" "$repo" || siph_err "Could not clone '$SIPH_PKG_REPO"
+        siph_msg "Cloning '$url'"
+        $git_cmd clone "$url" "$repo" || siph_err "Could not clone '$url"
     fi
-    cd "$repo" && siph_su_git checkout "$SIPH_PKG_BRANCH" || siph_err "Could not checkout '$SIPH_PKG_BRANCH'"
+
+    cd "$repo" && \
+        $git_cmd submodule init || siph_err "Could init git submodules"
+    cd "$repo" && \
+        $git_cmd submodule update || siph_err "Could update git submodules"
+
+    cd "$repo" && $git_cmd checkout "$branch" || siph_err "Could not checkout '$branch'"
 
     SIPH_BLD_SRCDIR="$repo"
     SIPH_BLD_BUILDDIR="$repo"
+}
+
+siph_fetch_git () {
+    url="$SIPH_PKG_REPO"
+    repo="$SIPH_REPODIR/$SIPH_PKG_NAME"
+    branch="$SIPH_PKG_BRANCH"
+    siph_do_fetch "$url" "$branch" "$repo"
 }
 
 
